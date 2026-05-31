@@ -1,4 +1,6 @@
+using Domain.Constants;
 using Domain.Entities;
+using Infrastructure.Persistence.Seed;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -19,6 +21,11 @@ public class RoleConfiguration : IEntityTypeConfiguration<Role>
         builder.HasIndex(r => r.Name)
             .IsUnique();
 
-        builder.Navigation("_users").UsePropertyAccessMode(PropertyAccessMode.Field);
+        builder.Navigation("_users")
+            .UsePropertyAccessMode(PropertyAccessMode.Field);
+
+        builder.HasData(
+            new { Id = RoleSeedConstants.AdminRoleId, Name = RoleNames.Admin },
+            new { Id = RoleSeedConstants.UserRoleId, Name = RoleNames.User });
     }
 }

@@ -23,9 +23,12 @@ public class RefreshTokenConfiguration : IEntityTypeConfiguration<RefreshToken>
             .IsRequired();
 
         builder.Property(t => t.IsRevoked)
+            .IsRequired()
             .HasDefaultValue(false);
 
         builder.Property(t => t.UserId)
             .IsRequired();
+
+        builder.HasIndex(t => t.UserId);
     }
 }

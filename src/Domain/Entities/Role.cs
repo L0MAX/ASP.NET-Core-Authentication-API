@@ -38,4 +38,18 @@ public class Role : Entity
     public static Role CreateUser() => Create(RoleNames.User);
 
     public static Role CreateAdmin() => Create(RoleNames.Admin);
+
+    internal static Role CreateForSeed(Guid id, string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            throw new DomainException("Role name is required.");
+        }
+
+        return new Role
+        {
+            Id = id,
+            Name = name.Trim()
+        };
+    }
 }

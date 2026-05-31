@@ -133,21 +133,81 @@ Migrations create the following tables:
 | `UserRoles` | Many-to-many join between users and roles |
 | `RefreshTokens` | Refresh tokens linked to users (cascade delete) |
 
-## Migrations
+## Entity Framework Core
+
+### Configuration
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| `ApplicationDbContext` | `Infrastructure/Persistence/` | DbSets, audit timestamps, soft-delete filter |
+| `UserConfiguration` | `Configurations/` | User properties + one-to-many refresh tokens |
+| `UserRoleConfiguration` | `Configurations/` | Many-to-many User ↔ Role via `UserRoles` |
+| `RoleConfiguration` | `Configurations/` | Role properties + `HasData` seed metadata |
+| `RefreshTokenConfiguration` | `Configurations/` | Token properties, indexes, FK to User |
+| `ApplicationDbContextFactory` | `Persistence/` | Design-time factory for CLI migrations |
+| `DatabaseExtensions` | `Persistence/` | Auto-migrate + runtime role seed on startup |
+
+**Default roles seeded:** `Admin`, `User` (via migration + runtime fallback)
+
+### Migration Commands
+
+Install the EF Core CLI (once):
 
 ```bash
-# Add a new migration
-dotnet ef migrations add MigrationName \
-  --project src/Infrastructure/Infrastructure.csproj \
-  --startup-project src/Api/Api.csproj \
-  --output-dir Persistence/Migrations
+dotnet tool install --global dotnet-ef
+```
 
-# Apply migrations
+Apply all pending migrations:
+
+```bash
 dotnet ef database update \
   --project src/Infrastructure/Infrastructure.csproj \
   --startup-project src/Api/Api.csproj
 ```
 
+Add a new migration after model changes:
+
+```bash
+dotnet ef migrations add YourMigrationName \
+  --project src/Infrastructure/Infrastructure.csproj \
+  --startup-project src/Api/Api.csproj \
+  --output-dir Persistence/Migrations
+```
+
+Remove the last migration (if not applied to the database):
+
+```bash
+dotnet ef migrations remove \
+  --project src/Infrastructure/Infrastructure.csproj \
+  --startup-project src/Api/Api.csproj
+```
+
+Generate a SQL script (all migrations):
+
+```bash
+dotnet ef migrations script \
+  --project src/Infrastructure/Infrastructure.csproj \
+  --startup-project src/Api/Api.csproj \
+  --output migrations.sql
+```
+
+List migrations:
+
+```bash
+dotnet ef migrations list \
+  --project src/Infrastructure/Infrastructure.csproj \
+  --startup-project src/Api/Api.csproj
+```
+
+> Migrations also run automatically on startup via `ApplyMigrationsAndSeedAsync()` in `Program.cs`.
+
+## Migrations History
+
+| Migration | Description |
+|-----------|-------------|
+| `InitialCreate` | Creates `Users` table |
+| `AddAuthEntities` | Adds `Roles`, `RefreshTokens`, `UserRoles`; updates `Users` |
+| `SeedDefaultRoles` | Inserts `Admin` and `User` roles (idempotent) |
 ## Docker SQL Server
 
 ```bash

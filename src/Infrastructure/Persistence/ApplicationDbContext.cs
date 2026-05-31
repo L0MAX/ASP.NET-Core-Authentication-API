@@ -5,6 +5,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Infrastructure.Persistence;
 
+/// <summary>
+/// EF Core database context for the application. Applies Fluent API configurations,
+/// global soft-delete filters, and audit timestamps on save.
+/// </summary>
 public class ApplicationDbContext : DbContext, IApplicationDbContext
 {
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)

@@ -32,26 +32,24 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
             .HasMaxLength(512);
 
         builder.Property(u => u.EmailConfirmed)
+            .IsRequired()
             .HasDefaultValue(false);
 
-        builder.HasMany<Role>("_roles")
-            .WithMany("_users")
-            .UsingEntity<Dictionary<string, object>>(
-                "UserRoles",
-                j => j.HasOne<Role>().WithMany().HasForeignKey("RoleId"),
-                j => j.HasOne<User>().WithMany().HasForeignKey("UserId"),
-                j =>
-                {
-                    j.HasKey("UserId", "RoleId");
-                    j.ToTable("UserRoles");
-                });
+        builder.Property(u => u.CreatedAt)
+            .IsRequired();
+
+        builder.Property(u => u.UpdatedAt);
+
+        builder.Property(u => u.IsDeleted)
+            .IsRequired()
+            .HasDefaultValue(false);
 
         builder.HasMany<RefreshToken>("_refreshTokens")
             .WithOne(t => t.User)
             .HasForeignKey(t => t.UserId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.Navigation("_roles").UsePropertyAccessMode(PropertyAccessMode.Field);
-        builder.Navigation("_refreshTokens").UsePropertyAccessMode(PropertyAccessMode.Field);
+        builder.Navigation("_refreshTokens")
+            .UsePropertyAccessMode(PropertyAccessMode.Field);
     }
 }

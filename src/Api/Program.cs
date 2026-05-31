@@ -17,12 +17,7 @@ builder.Services.AddApiServices(builder.Configuration);
 
 var app = builder.Build();
 
-using (var scope = app.Services.CreateScope())
-{
-    var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-    await RoleSeeder.SeedAsync(context, logger);
-}
+await app.Services.ApplyMigrationsAndSeedAsync();
 
 app.ConfigurePipeline();
 

@@ -69,6 +69,18 @@ namespace Infrastructure.Persistence.Migrations
                     b.HasIndex("Name")
                         .IsUnique();
 
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("a1a1a1a1-1111-4111-8111-111111111111"),
+                            Name = "Admin"
+                        },
+                        new
+                        {
+                            Id = new Guid("b2b2b2b2-2222-4222-8222-222222222222"),
+                            Name = "User"
+                        });
+
                     b.ToTable("Roles", (string)null);
                 });
 
@@ -97,7 +109,9 @@ namespace Infrastructure.Persistence.Migrations
                         .HasColumnType("nvarchar(100)");
 
                     b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
 
                     b.Property<string>("LastName")
                         .IsRequired()

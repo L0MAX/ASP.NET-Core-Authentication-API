@@ -53,7 +53,11 @@ Auth/
 cp .env.example .env
 # Edit .env — ensure the SQL password matches your SQL Server instance
 
-# 2. (Optional) Start SQL Server via Docker
+# 2. Start the full stack with Docker Compose (recommended)
+cp .env.docker.example .env
+docker compose up --build -d
+
+# Or start SQL Server only and run the API locally:
 docker run -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=YourStrong@Passw0rd" \
   -p 1433:1433 --name sqlserver -d mcr.microsoft.com/mssql/server:2022-latest
 
@@ -600,7 +604,7 @@ cp .env.example .env
 
 Non-secret defaults remain in `src/Api/appsettings.json`. Environment variables from `.env` override those values at runtime and during EF migrations.
 
-> **Docker note:** Set `MSSQL_SA_PASSWORD` to the same value as the password in your `.env` connection string.
+> **Docker note:** When using Docker Compose, `MSSQL_SA_PASSWORD` in `.env` must match the password embedded in `ConnectionStrings__DefaultConnection`. See [Docker Deployment](#docker-deployment).
 
 ## Database Schema
 
@@ -673,18 +677,115 @@ dotnet ef migrations list \
 | `AddEmailVerificationTokens` | Creates `EmailVerificationTokens` table |
 | `AddPasswordResetTokens` | Creates `PasswordResetTokens` table |
 
-## Docker SQL Server
+## Docker Deployment
+
+Run the full stack (API + SQL Server) with Docker Compose.
+
+### Prerequisites
+
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (or Docker Engine + Compose v2)
+
+### Quick start
+
+```bash
+# 1. Create environment file from the Docker template
+cp .env.docker.example .env
+# Edit .env — set MSSQL_SA_PASSWORD and JWT_SECRET (min. 32 chars)
+
+# 2. Build and start services
+docker compose up --build -d
+
+# 3. Verify services are running
+docker compose ps
+docker compose logs -f api
+```
+
+| Service | URL / Port | Description |
+|---------|------------|-------------|
+| **API** | http://localhost:8080 | Authentication API |
+| **Swagger** | http://localhost:8080/swagger | Available when `ASPNETCORE_ENVIRONMENT=Development` |
+| **Health** | http://localhost:8080/api/health | Health check endpoint |
+| **SQL Server** | `localhost:1433` | Exposed for local tools (SSMS, Azure Data Studio) |
+
+Migrations and role seeding run automatically when the API container starts.
+
+### Services
+
+| Service | Image / Build | Purpose |
+|---------|---------------|---------|
+| `api` | Built from `Dockerfile` | ASP.NET Core 9 authentication API |
+| `sqlserver` | `mcr.microsoft.com/mssql/server:2022-latest` | SQL Server 2022 database |
+
+**Startup order:** SQL Server health check must pass before the API starts (`depends_on: service_healthy`).
+
+### Environment variables
+
+Copy `.env.docker.example` to `.env`. Docker Compose reads this file automatically.
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `MSSQL_SA_PASSWORD` | Yes | SQL Server SA password (used by both containers) |
+| `JWT_SECRET` | Yes | JWT signing key (min. 32 characters) |
+| `ASPNETCORE_ENVIRONMENT` | No | Default `Development` (enables Swagger). Use `Production` in prod |
+| `API_PORT` | No | Host port for API (default `8080`) |
+| `SQLSERVER_PORT` | No | Host port for SQL Server (default `1433`) |
+| `JwtSettings__Issuer` | No | JWT issuer claim |
+| `JwtSettings__Audience` | No | JWT audience claim |
+| `PasswordResetSettings__ResetLinkBaseUrl` | No | Base URL for reset links in emails |
+
+The API receives configuration via ASP.NET Core environment variable binding (e.g. `ConnectionStrings__DefaultConnection`, `JwtSettings__Secret`).
+
+### Common commands
+
+```bash
+# Start in foreground (see logs)
+docker compose up --build
+
+# Stop services
+docker compose down
+
+# Stop and remove database volume (destructive)
+docker compose down -v
+
+# Rebuild API after code changes
+docker compose up --build -d api
+
+# View API logs
+docker compose logs -f api
+
+# View SQL Server logs
+docker compose logs -f sqlserver
+```
+
+### Dockerfile overview
+
+Multi-stage build:
+
+1. **build** — restore and compile with .NET 9 SDK
+2. **publish** — publish Release output
+3. **final** — ASP.NET 9 runtime image, non-root user, port `8080`
+
+### Apple Silicon (M1/M2/M3)
+
+SQL Server requires `linux/amd64`. If the database container fails to start, uncomment `platform: linux/amd64` under the `sqlserver` service in `docker-compose.yml`.
+
+### Production notes
+
+- Set `ASPNETCORE_ENVIRONMENT=Production` in `.env` (disables Swagger)
+- Use strong, unique values for `MSSQL_SA_PASSWORD` and `JWT_SECRET`
+- Do not commit `.env` to source control
+- Consider removing the SQL Server port mapping (`1433:1433`) so the database is only reachable within the Docker network
+
+### Standalone SQL Server (optional)
+
+If you prefer running only the database in Docker and the API locally:
 
 ```bash
 docker run -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=YourStrong@Passw0rd" \
   -p 1433:1433 --name sqlserver -d mcr.microsoft.com/mssql/server:2022-latest
 ```
 
-If the container already exists:
-
-```bash
-docker start sqlserver
-```
+Point `ConnectionStrings__DefaultConnection` in your local `.env` to `Server=localhost,1433;...`.
 
 ## Layer Dependencies
 

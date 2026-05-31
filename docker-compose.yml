@@ -1,0 +1,65 @@
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: csharp-auth-sqlserver
+    # Uncomment on Apple Silicon if SQL Server fails to start:
+    # platform: linux/amd64
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?Set MSSQL_SA_PASSWORD in .env}
+    ports:
+      - "${SQLSERVER_PORT:-1433}:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q \"SELECT 1\" 2>/dev/null || /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q \"SELECT 1\" || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - auth-network
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: csharp-auth-api
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=CleanArchitectureDb;User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True;MultipleActiveResultSets=true"
+      JwtSettings__Secret: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      JwtSettings__Issuer: ${JwtSettings__Issuer:-CleanArchitecture.Api}
+      JwtSettings__Audience: ${JwtSettings__Audience:-CleanArchitecture.Client}
+      JwtSettings__AccessTokenExpirationMinutes: ${JwtSettings__AccessTokenExpirationMinutes:-15}
+      JwtSettings__RefreshTokenExpirationInDays: ${JwtSettings__RefreshTokenExpirationInDays:-7}
+      EmailVerificationSettings__TokenExpirationHours: ${EmailVerificationSettings__TokenExpirationHours:-24}
+      PasswordResetSettings__TokenExpirationHours: ${PasswordResetSettings__TokenExpirationHours:-1}
+      PasswordResetSettings__ResetLinkBaseUrl: ${PasswordResetSettings__ResetLinkBaseUrl:-http://localhost:8080/reset-password}
+    ports:
+      - "${API_PORT:-8080}:8080"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    volumes:
+      - api_logs:/app/logs
+    networks:
+      - auth-network
+    restart: unless-stopped
+
+volumes:
+  sqlserver_data:
+    name: csharp-auth-sqlserver-data
+  api_logs:
+    name: csharp-auth-api-logs
+
+networks:
+  auth-network:
+    name: csharp-auth-network
+    driver: bridge

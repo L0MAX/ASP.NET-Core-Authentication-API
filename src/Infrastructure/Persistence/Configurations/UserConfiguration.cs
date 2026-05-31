@@ -12,6 +12,14 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
 
         builder.HasKey(u => u.Id);
 
+        builder.Property(u => u.FirstName)
+            .IsRequired()
+            .HasMaxLength(100);
+
+        builder.Property(u => u.LastName)
+            .IsRequired()
+            .HasMaxLength(100);
+
         builder.Property(u => u.Email)
             .IsRequired()
             .HasMaxLength(256);
@@ -23,13 +31,27 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
             .IsRequired()
             .HasMaxLength(512);
 
-        builder.Property(u => u.FirstName)
-            .HasMaxLength(100);
+        builder.Property(u => u.EmailConfirmed)
+            .HasDefaultValue(false);
 
-        builder.Property(u => u.LastName)
-            .HasMaxLength(100);
+        builder.HasMany<Role>("_roles")
+            .WithMany("_users")
+            .UsingEntity<Dictionary<string, object>>(
+                "UserRoles",
+                j => j.HasOne<Role>().WithMany().HasForeignKey("RoleId"),
+                j => j.HasOne<User>().WithMany().HasForeignKey("UserId"),
+                j =>
+                {
+                    j.HasKey("UserId", "RoleId");
+                    j.ToTable("UserRoles");
+                });
 
-        builder.Property(u => u.IsActive)
-            .HasDefaultValue(true);
+        builder.HasMany<RefreshToken>("_refreshTokens")
+            .WithOne(t => t.User)
+            .HasForeignKey(t => t.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Navigation("_roles").UsePropertyAccessMode(PropertyAccessMode.Field);
+        builder.Navigation("_refreshTokens").UsePropertyAccessMode(PropertyAccessMode.Field);
     }
 }

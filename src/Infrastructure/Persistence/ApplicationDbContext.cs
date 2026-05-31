@@ -14,7 +14,15 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
 
     public DbSet<User> Users => Set<User>();
 
+    public DbSet<Role> Roles => Set<Role>();
+
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+
     IQueryable<User> IApplicationDbContext.Users => Users.AsNoTracking();
+
+    IQueryable<Role> IApplicationDbContext.Roles => Roles.AsNoTracking();
+
+    IQueryable<RefreshToken> IApplicationDbContext.RefreshTokens => RefreshTokens.AsNoTracking();
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
@@ -35,12 +43,12 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
         {
             if (entry.State == EntityState.Added)
             {
-                entry.Entity.CreatedAt = DateTime.UtcNow;
+                entry.Entity.ApplyCreated(DateTime.UtcNow);
             }
 
             if (entry.State == EntityState.Modified)
             {
-                entry.Entity.UpdatedAt = DateTime.UtcNow;
+                entry.Entity.ApplyUpdated(DateTime.UtcNow);
             }
         }
     }

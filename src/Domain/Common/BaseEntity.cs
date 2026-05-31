@@ -1,15 +1,23 @@
 namespace Domain.Common;
 
 /// <summary>
-/// Base type for all domain entities with audit and soft-delete support.
+/// Base type for auditable entities with soft-delete support.
 /// </summary>
-public abstract class BaseEntity
+public abstract class BaseEntity : Entity
 {
-    public Guid Id { get; set; } = Guid.NewGuid();
+    public DateTime CreatedAt { get; private set; }
 
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime? UpdatedAt { get; private set; }
 
-    public DateTime? UpdatedAt { get; set; }
+    public bool IsDeleted { get; private set; }
 
-    public bool IsDeleted { get; set; }
+    internal void ApplyCreated(DateTime timestamp) => CreatedAt = timestamp;
+
+    internal void ApplyUpdated(DateTime timestamp) => UpdatedAt = timestamp;
+
+    public void MarkDeleted()
+    {
+        IsDeleted = true;
+        ApplyUpdated(DateTime.UtcNow);
+    }
 }

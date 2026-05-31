@@ -70,9 +70,75 @@ dotnet ef database update \
 dotnet run --project src/Api/Api.csproj
 ```
 
-Open Swagger UI at `https://localhost:5001/swagger`.
+Open Swagger UI at `https://localhost:5001/swagger` (or `http://localhost:5000/swagger`).
 
 > Migrations and default role seeding also run automatically on startup.
+
+## Swagger & JWT Authentication
+
+Swagger UI is enabled in **Development** with full JWT Bearer support.
+
+### Authorize button
+
+The **Authorize** button appears in the top-right of Swagger UI. It is wired to the `Bearer` HTTP security scheme defined in `src/Api/Swagger/SwaggerExtensions.cs`.
+
+Only endpoints decorated with `[Authorize]` show a lock icon and require a token. Public routes (`register`, `login`, `health`, etc.) remain unlocked.
+
+### Configuration
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| `SwaggerExtensions` | `Api/Swagger/` | OpenAPI doc, Bearer scheme, Swagger UI options |
+| `AuthorizeCheckOperationFilter` | `Api/Swagger/` | Applies JWT requirement per-endpoint (not globally) |
+| `SwaggerAuthSchemes.Bearer` | `Api/Swagger/` | Security scheme identifier |
+
+**Swagger UI options enabled:**
+
+- `EnablePersistAuthorization()` — token survives page refresh
+- `DisplayRequestDuration()` — shows request timing
+- `DocExpansion.List` — collapsible endpoint groups
+
+### Testing secured endpoints in Swagger
+
+1. **Register** — `POST /api/auth/register` with a new user payload.
+2. **Verify email** — copy the token from server logs, then call `POST /api/auth/verify-email`.
+3. **Login** — `POST /api/auth/login` and copy `data.accessToken` from the response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "accessToken": "eyJhbGciOiJIUzI1NiIs...",
+    "refreshToken": "...",
+    "accessTokenExpiresAt": "2026-05-31T12:15:00Z"
+  }
+}
+```
+
+4. **Authorize** — click **Authorize**, paste the access token (without the `Bearer` prefix), click **Authorize**, then **Close**.
+5. **Call secured endpoints:**
+
+| Endpoint | Expected result |
+|----------|-----------------|
+| `GET /api/auth/me` | `200` — current user profile |
+| `GET /api/user/dashboard` | `200` — user dashboard (requires `User` role) |
+| `GET /api/admin/dashboard` | `403` — unless user has `Admin` role |
+
+6. **Logout / clear token** — click **Authorize** again and **Logout**, or clear browser storage.
+
+### Testing with curl (alternative)
+
+```bash
+# Login and extract token (requires jq)
+TOKEN=$(curl -s -X POST https://localhost:5001/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"user@example.com","password":"YourPassword1!"}' \
+  | jq -r '.data.accessToken')
+
+# Secured request
+curl https://localhost:5001/api/auth/me \
+  -H "Authorization: Bearer $TOKEN"
+```
 
 ## API Endpoints
 

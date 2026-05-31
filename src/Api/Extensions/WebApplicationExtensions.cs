@@ -1,8 +1,8 @@
 using Api.Filters;
 using Api.Middleware;
+using Api.Swagger;
 using Application;
 using Infrastructure;
-using Microsoft.OpenApi.Models;
 using Serilog;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -18,12 +18,7 @@ public static class WebApplicationExtensions
 
         if (app.Environment.IsDevelopment())
         {
-            app.UseSwagger();
-            app.UseSwaggerUI(options =>
-            {
-                options.SwaggerEndpoint("/swagger/v1/swagger.json", "Clean Architecture API v1");
-                options.RoutePrefix = "swagger";
-            });
+            app.UseSwaggerDocumentation();
         }
 
         app.UseSerilogRequestLogging();
@@ -48,41 +43,7 @@ public static class WebApplicationExtensions
             });
 
         services.AddEndpointsApiExplorer();
-
-        services.AddSwaggerGen(options =>
-        {
-            options.SwaggerDoc("v1", new OpenApiInfo
-            {
-                Title = "Clean Architecture API",
-                Version = "v1",
-                Description = "ASP.NET Core 9 Web API with Clean Architecture"
-            });
-
-            options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
-            {
-                Name = "Authorization",
-                Type = SecuritySchemeType.Http,
-                Scheme = "Bearer",
-                BearerFormat = "JWT",
-                In = ParameterLocation.Header,
-                Description = "Enter your JWT token"
-            });
-
-            options.AddSecurityRequirement(new OpenApiSecurityRequirement
-            {
-                {
-                    new OpenApiSecurityScheme
-                    {
-                        Reference = new OpenApiReference
-                        {
-                            Type = ReferenceType.SecurityScheme,
-                            Id = "Bearer"
-                        }
-                    },
-                    Array.Empty<string>()
-                }
-            });
-        });
+        services.AddSwaggerDocumentation();
 
         services.AddApplication();
         services.AddInfrastructure(configuration);

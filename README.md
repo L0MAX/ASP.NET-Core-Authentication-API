@@ -92,7 +92,83 @@ Open Swagger UI at `https://localhost:5001/swagger`.
 | `GET` | `/api/user/dashboard` | User or Admin | User dashboard (sample) |
 | `GET` | `/api/user/activity` | User or Admin | User activity (sample) |
 
-All endpoints return a wrapped `ApiResponse<T>` with `success`, `data`, and `message` fields.
+All endpoints return a standardized `ApiResponse<T>` envelope.
+
+### Response envelope
+
+**Success example:**
+
+```json
+{
+  "success": true,
+  "data": { },
+  "message": "Login successful.",
+  "traceId": "0HN5...",
+  "timestamp": "2026-05-31T12:00:00.0000000+00:00"
+}
+```
+
+**Validation error example (`400`):**
+
+```json
+{
+  "success": false,
+  "message": "One or more validation errors occurred.",
+  "errorCode": "VALIDATION_FAILED",
+  "errors": {
+    "email": ["Email is required."],
+    "password": ["Password must be at least 8 characters."]
+  },
+  "traceId": "0HN5...",
+  "timestamp": "2026-05-31T12:00:00.0000000+00:00"
+}
+```
+
+**Business error example (`401`):**
+
+```json
+{
+  "success": false,
+  "message": "Invalid email or password.",
+  "errorCode": "UNAUTHORIZED",
+  "traceId": "0HN5...",
+  "timestamp": "2026-05-31T12:00:00.0000000+00:00"
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `success` | Whether the request succeeded |
+| `data` | Payload on success (`null` on errors) |
+| `message` | Human-readable summary |
+| `errors` | Field-level validation errors (key = camelCase property name) |
+| `errorCode` | Machine-readable error identifier |
+| `traceId` | Correlation ID for log lookup (also returned as `X-Correlation-ID` header) |
+| `timestamp` | UTC time the response was generated |
+| `details` | Stack trace / diagnostics — **Development only**, for unexpected `500` errors |
+
+### Exception handling
+
+Unhandled exceptions are caught by `GlobalExceptionHandlingMiddleware` and mapped to consistent HTTP status codes and error codes:
+
+| Exception | HTTP | `errorCode` |
+|-----------|------|-------------|
+| `ValidationException` (FluentValidation) | `400` | `VALIDATION_FAILED` |
+| `DomainException` | `400` | `DOMAIN_RULE_VIOLATION` |
+| `ArgumentException` / `BadHttpRequestException` | `400` | `INVALID_ARGUMENT` / `BAD_REQUEST` |
+| `UnauthorizedException` | `401` | `UNAUTHORIZED` |
+| `ForbiddenException` | `403` | `FORBIDDEN` |
+| `NotFoundException` | `404` | `NOT_FOUND` |
+| `ConflictException` | `409` | `CONFLICT` |
+| Unhandled | `500` | `INTERNAL_ERROR` |
+
+**Logging behavior:**
+
+- **500** — logged at `Error` with full exception and structured properties (`TraceId`, `ErrorCode`, `StatusCode`, path)
+- **Validation** — logged at `Information` with field error count (no stack trace noise)
+- **Other handled 4xx** — logged at `Warning` with error code and message
+
+Pass `X-Correlation-ID` on requests to propagate a trace ID across services; otherwise one is generated automatically.
 
 ### Registration (`POST /api/auth/register`)
 

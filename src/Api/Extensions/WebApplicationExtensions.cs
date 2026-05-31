@@ -1,8 +1,11 @@
+using Api.Filters;
 using Api.Middleware;
 using Application;
 using Infrastructure;
 using Microsoft.OpenApi.Models;
 using Serilog;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Api.Extensions;
 
@@ -11,6 +14,7 @@ public static class WebApplicationExtensions
     public static WebApplication ConfigurePipeline(this WebApplication app)
     {
         app.UseMiddleware<GlobalExceptionHandlingMiddleware>();
+        app.UseMiddleware<CorrelationIdMiddleware>();
 
         if (app.Environment.IsDevelopment())
         {
@@ -33,7 +37,16 @@ public static class WebApplicationExtensions
 
     public static IServiceCollection AddApiServices(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddControllers();
+        services.AddControllers(options =>
+            {
+                options.Filters.Add<ApiResponseEnrichmentFilter>();
+            })
+            .AddJsonOptions(options =>
+            {
+                options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+                options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+            });
+
         services.AddEndpointsApiExplorer();
 
         services.AddSwaggerGen(options =>

@@ -1,0 +1,36 @@
+using System.Security.Cryptography;
+using Application.Common.Interfaces;
+using Microsoft.Extensions.Caching.Memory;
+
+namespace Infrastructure.Identity;
+
+public sealed class PasswordResetTokenProvider : IPasswordResetTokenProvider
+{
+    private const string CacheKeyPrefix = "password-reset:";
+    private static readonly TimeSpan TokenLifetime = TimeSpan.FromHours(1);
+
+    private readonly IMemoryCache _cache;
+
+    public PasswordResetTokenProvider(IMemoryCache cache)
+    {
+        _cache = cache;
+    }
+
+    public Task<string> GenerateTokenAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+        _cache.Set($"{CacheKeyPrefix}{token}", userId, TokenLifetime);
+        return Task.FromResult(token);
+    }
+
+    public Task<Guid?> ValidateTokenAsync(string token, CancellationToken cancellationToken = default)
+    {
+        if (_cache.TryGetValue($"{CacheKeyPrefix}{token}", out Guid userId))
+        {
+            _cache.Remove($"{CacheKeyPrefix}{token}");
+            return Task.FromResult<Guid?>(userId);
+        }
+
+        return Task.FromResult<Guid?>(null);
+    }
+}

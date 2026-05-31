@@ -2,6 +2,7 @@ using System.Net;
 using System.Text.Json;
 using Application.Common.Exceptions;
 using Application.Common.Models;
+using FluentValidation;
 
 namespace Api.Middleware;
 
@@ -32,12 +33,36 @@ public class GlobalExceptionHandlingMiddleware
 
     private async Task HandleExceptionAsync(HttpContext context, Exception exception)
     {
-        var (statusCode, message) = exception switch
+        var (statusCode, message, errors) = exception switch
         {
-            NotFoundException notFound => (HttpStatusCode.NotFound, notFound.Message),
-            UnauthorizedAccessException unauthorized => (HttpStatusCode.Unauthorized, unauthorized.Message),
-            ArgumentException argument => (HttpStatusCode.BadRequest, argument.Message),
-            _ => (HttpStatusCode.InternalServerError, "An unexpected error occurred.")
+            ValidationException validation => (
+                HttpStatusCode.BadRequest,
+                "Validation failed.",
+                validation.Errors.Select(e => e.ErrorMessage).ToList()),
+            NotFoundException notFound => (
+                HttpStatusCode.NotFound,
+                notFound.Message,
+                null as IReadOnlyList<string>),
+            UnauthorizedException unauthorized => (
+                HttpStatusCode.Unauthorized,
+                unauthorized.Message,
+                null),
+            ConflictException conflict => (
+                HttpStatusCode.Conflict,
+                conflict.Message,
+                null),
+            UnauthorizedAccessException unauthorized => (
+                HttpStatusCode.Unauthorized,
+                unauthorized.Message,
+                null),
+            ArgumentException argument => (
+                HttpStatusCode.BadRequest,
+                argument.Message,
+                null),
+            _ => (
+                HttpStatusCode.InternalServerError,
+                "An unexpected error occurred.",
+                null)
         };
 
         if (statusCode == HttpStatusCode.InternalServerError)
@@ -54,9 +79,11 @@ public class GlobalExceptionHandlingMiddleware
         context.Response.ContentType = "application/json";
         context.Response.StatusCode = (int)statusCode;
 
-        var response = ApiResponse<object>.Fail(message);
+        var responseBody = errors is { Count: > 0 }
+            ? ApiResponse<object>.Fail($"{message} {string.Join(' ', errors)}")
+            : ApiResponse<object>.Fail(message);
 
-        await context.Response.WriteAsync(JsonSerializer.Serialize(response, new JsonSerializerOptions
+        await context.Response.WriteAsync(JsonSerializer.Serialize(responseBody, new JsonSerializerOptions
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         }));

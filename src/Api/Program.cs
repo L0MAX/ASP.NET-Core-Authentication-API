@@ -1,5 +1,6 @@
 using Api.Extensions;
 using DotNetEnv;
+using Infrastructure.Persistence;
 using Serilog;
 
 Env.TraversePath().Load();
@@ -15,6 +16,13 @@ builder.Host.UseSerilog((context, services, configuration) =>
 builder.Services.AddApiServices(builder.Configuration);
 
 var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    await RoleSeeder.SeedAsync(context, logger);
+}
 
 app.ConfigurePipeline();
 

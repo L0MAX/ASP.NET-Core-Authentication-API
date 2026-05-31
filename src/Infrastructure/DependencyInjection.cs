@@ -1,7 +1,10 @@
 using System.Text;
 using Application.Common.Interfaces;
 using Infrastructure.Authentication;
+using Infrastructure.Email;
+using Infrastructure.Identity;
 using Infrastructure.Persistence;
+using Infrastructure.Persistence.Repositories;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -18,6 +21,8 @@ public static class DependencyInjection
     {
         services.Configure<JwtSettings>(configuration.GetSection(JwtSettings.SectionName));
 
+        services.AddMemoryCache();
+
         services.AddDbContext<ApplicationDbContext>(options =>
             options.UseSqlServer(
                 configuration.GetConnectionString("DefaultConnection"),
@@ -33,7 +38,11 @@ public static class DependencyInjection
         services.AddScoped<IApplicationDbContext>(provider =>
             provider.GetRequiredService<ApplicationDbContext>());
 
-        services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
+        services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<IJwtService, JwtService>();
+        services.AddScoped<IPasswordHasher, PasswordHasher>();
+        services.AddScoped<IEmailService, EmailService>();
+        services.AddSingleton<IPasswordResetTokenProvider, PasswordResetTokenProvider>();
 
         services.AddAuthentication(options =>
         {

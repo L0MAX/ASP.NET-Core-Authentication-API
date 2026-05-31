@@ -84,7 +84,7 @@ Open Swagger UI at `https://localhost:5001/swagger`.
 | `POST` | `/api/auth/login` | No | Login and receive JWT tokens |
 | `POST` | `/api/auth/forgot-password` | No | Request password reset email |
 | `POST` | `/api/auth/reset-password` | No | Reset password with token |
-| `POST` | `/api/auth/refresh-token` | No | Rotate refresh token |
+| `POST` | `/api/auth/refresh` | No | Rotate refresh token, issue new access token |
 | `GET` | `/api/auth/me` | Bearer | Get current user profile |
 
 All endpoints return a wrapped `ApiResponse<T>` with `success`, `data`, and `message` fields.
@@ -189,6 +189,41 @@ curl -X POST https://localhost:5001/api/auth/login \
 
 > Invalid email and wrong password return the same `401` message to prevent account enumeration.
 
+### Refresh token (`POST /api/auth/refresh`)
+
+1. Validates request (refresh token required)
+2. Looks up token in the database
+3. Verifies token is not revoked
+4. Verifies token is not expired
+5. Revokes the previous refresh token (rotation)
+6. Generates new access token and refresh token
+7. Persists the new refresh token and returns `AuthResponse`
+
+```bash
+curl -X POST https://localhost:5001/api/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{"refreshToken": "<refresh_token>"}'
+```
+
+**Success response:** Same shape as login — new `accessToken`, `refreshToken`, `accessTokenExpiresAt`, and `user`.
+
+**Error responses:**
+
+| Status | Condition | Message |
+|--------|-----------|---------|
+| `400` | Missing refresh token | `"Refresh token is required."` |
+| `401` | Unknown, revoked, or expired token | `"Invalid or expired refresh token."` |
+
+**Security practices:**
+
+- **Token rotation** — each refresh invalidates the previous token and issues a new one
+- **Reuse detection** — if a revoked token is reused, all user sessions are revoked (possible token theft)
+- **Generic errors** — invalid, expired, and revoked tokens return the same message
+- **Server-side storage** — refresh tokens are persisted in `RefreshTokens` and can be revoked individually or in bulk (e.g. on password reset)
+- **Cryptographic tokens** — 512-bit random values, not predictable JWTs
+
+> Always replace the stored refresh token with the new one from the response. Do not reuse old refresh tokens.
+
 ### Get current user
 
 ```bash
@@ -211,9 +246,9 @@ curl https://localhost:5001/api/auth/me \
 | Token | Lifetime | Storage | Purpose |
 |-------|----------|---------|---------|
 | **Access token** | 15 minutes | Client only | Sent on every API request |
-| **Refresh token** | 7 days | Database (`RefreshTokens`) | Obtain new access token via `/api/auth/refresh-token` |
+| **Refresh token** | 7 days | Database (`RefreshTokens`) | Obtain new access token via `/api/auth/refresh` |
 
-Access tokens are short-lived to limit exposure if stolen. Refresh tokens are stored server-side, rotated on use, and revoked on password reset.
+Access tokens are short-lived to limit exposure if stolen. Refresh tokens are stored server-side, rotated on each use, and revoked on password reset or reuse detection.
 
 ### Password hashing
 

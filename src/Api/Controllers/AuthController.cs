@@ -117,12 +117,12 @@ public class AuthController : ControllerBase
         return Ok(ApiResponse<object>.Ok(null!, "Password reset successful."));
     }
 
-    [HttpPost("refresh-token")]
+    [HttpPost("refresh")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(ApiResponse<AuthResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> RefreshToken(
+    public async Task<IActionResult> Refresh(
         [FromBody] RefreshTokenRequest request,
         CancellationToken cancellationToken)
     {

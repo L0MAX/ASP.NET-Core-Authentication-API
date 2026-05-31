@@ -1,0 +1,30 @@
+## Build artifacts
+bin/
+obj/
+out/
+publish/
+
+## IDE
+.vs/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+## Logs
+logs/
+*.log
+
+## OS
+.DS_Store
+Thumbs.db
+
+## Secrets
+appsettings.Local.json
+*.pfx
+
+## EF
+*.db
+*.db-shm
+*.db-wal

@@ -59,7 +59,48 @@ dotnet run --project src/Api/Api.csproj
 
 Open Swagger UI at `https://localhost:5001/swagger`.
 
-**Available endpoint:** `GET /api/health` (anonymous health check)
+## API Endpoints
+
+| Method | Route | Auth | Description |
+|--------|-------|------|-------------|
+| `GET` | `/api/health` | No | Health check |
+| `POST` | `/api/auth/register` | No | Register a new user |
+| `POST` | `/api/auth/login` | No | Login and receive tokens |
+| `POST` | `/api/auth/forgot-password` | No | Request password reset email |
+| `POST` | `/api/auth/reset-password` | No | Reset password with token |
+| `POST` | `/api/auth/refresh-token` | No | Rotate refresh token |
+| `GET` | `/api/auth/me` | Bearer | Get current user profile |
+
+### Example: Register
+
+```bash
+curl -X POST https://localhost:5001/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "firstName": "Jane",
+    "lastName": "Doe",
+    "email": "jane@example.com",
+    "password": "Password1",
+    "confirmPassword": "Password1"
+  }'
+```
+
+### Example: Login
+
+```bash
+curl -X POST https://localhost:5001/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "jane@example.com", "password": "Password1"}'
+```
+
+### Example: Get current user
+
+```bash
+curl https://localhost:5001/api/auth/me \
+  -H "Authorization: Bearer <access_token>"
+```
+
+All endpoints return a wrapped `ApiResponse<T>` with `success`, `data`, and `message` fields.
 
 ## Configuration
 
@@ -128,11 +169,3 @@ Api → Infrastructure → Application → Domain
 ```
 
 Domain has zero project references. All dependencies point inward.
-
-## What's Next
-
-The authentication **domain model** and **persistence layer** are in place. Typical next steps:
-
-- Register / login / refresh-token endpoints in the Application and API layers
-- Password hashing service (e.g. ASP.NET Core Identity `PasswordHasher` or BCrypt)
-- Role seeding on startup (`Admin`, `User`)

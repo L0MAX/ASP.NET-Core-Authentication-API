@@ -87,6 +87,10 @@ Open Swagger UI at `https://localhost:5001/swagger`.
 | `POST` | `/api/auth/reset-password` | No | Reset password with token |
 | `POST` | `/api/auth/refresh` | No | Rotate refresh token, issue new access token |
 | `GET` | `/api/auth/me` | Bearer | Get current user profile |
+| `GET` | `/api/admin/dashboard` | Admin | Admin dashboard (sample) |
+| `GET` | `/api/admin/settings` | Admin | Admin settings (sample) |
+| `GET` | `/api/user/dashboard` | User or Admin | User dashboard (sample) |
+| `GET` | `/api/user/activity` | User or Admin | User activity (sample) |
 
 All endpoints return a wrapped `ApiResponse<T>` with `success`, `data`, and `message` fields.
 
@@ -307,6 +311,34 @@ curl https://localhost:5001/api/auth/me \
   -H "Authorization: Bearer <access_token>"
 ```
 
+### Admin endpoints (Admin role required)
+
+```bash
+# Admin dashboard
+curl https://localhost:5001/api/admin/dashboard \
+  -H "Authorization: Bearer <access_token>"
+
+# Admin settings
+curl https://localhost:5001/api/admin/settings \
+  -H "Authorization: Bearer <access_token>"
+```
+
+Returns `403 Forbidden` if the token does not include the `Admin` role.
+
+### User endpoints (User or Admin role)
+
+```bash
+# User dashboard
+curl https://localhost:5001/api/user/dashboard \
+  -H "Authorization: Bearer <access_token>"
+
+# User activity
+curl https://localhost:5001/api/user/activity \
+  -H "Authorization: Bearer <access_token>"
+```
+
+Returns `403 Forbidden` if the token has no `User` or `Admin` role claim.
+
 ## Authentication
 
 ### JWT claims
@@ -316,6 +348,80 @@ curl https://localhost:5001/api/auth/me \
 | `userId` | User identifier |
 | `email` | User email |
 | `role` | One claim per role (e.g. `User`, `Admin`) |
+
+### Role-based authorization
+
+Two roles are seeded on startup: **Admin** and **User**. New registrations receive the **User** role by default.
+
+#### Authorization policies
+
+Policies are registered in `AuthorizationConfiguration` and referenced from controllers:
+
+| Policy | Constant | Requirement | Example usage |
+|--------|----------|-------------|---------------|
+| Admin only | `AuthorizationPolicies.AdminOnly` | Must have `Admin` role | `[Authorize(Policy = AuthorizationPolicies.AdminOnly)]` |
+| User or Admin | `AuthorizationPolicies.UserOrAdmin` | Must have `User` or `Admin` role | `[Authorize(Policy = AuthorizationPolicies.UserOrAdmin)]` |
+
+You can also use role attributes directly:
+
+```csharp
+[Authorize(Roles = AuthRoles.Admin)]
+public class AdminController : ControllerBase { ... }
+
+[Authorize(Roles = $"{AuthRoles.User},{AuthRoles.Admin}")]
+public IActionResult GetActivity() { ... }
+```
+
+#### Authorization flow
+
+```
+Client request with Authorization: Bearer <access_token>
+        │
+        ▼
+┌─────────────────────────┐
+│  JWT Bearer middleware  │  Validate signature, issuer, audience, expiry
+└───────────┬─────────────┘
+            │ valid token → build ClaimsPrincipal (userId, email, role claims)
+            ▼
+┌─────────────────────────┐
+│  [Authorize] attribute  │  Endpoint requires authentication + role/policy
+└───────────┬─────────────┘
+            │
+     ┌──────┴──────┐
+     │ no token or │──► 401 Unauthorized
+     │ invalid JWT │
+     └──────┬──────┘
+            │ authenticated
+            ▼
+┌─────────────────────────┐
+│  Role / policy check    │  Compare JWT `role` claims to required roles
+└───────────┬─────────────┘
+            │
+     ┌──────┴──────┐
+     │ missing role│──► 403 Forbidden
+     └──────┬──────┘
+            │ authorized
+            ▼
+      Controller action runs
+```
+
+1. **Login** — `AuthService` loads the user's roles from `UserRoles` and `JwtService` embeds each role as a separate `role` claim in the access token.
+2. **Request** — `JwtBearerConfiguration` maps the JWT `role` claim to `RoleClaimType`, so ASP.NET Core authorization can evaluate `[Authorize(Roles = ...)]` and named policies.
+3. **Enforcement** — Missing or invalid tokens return **401**. Valid tokens without the required role return **403**.
+
+#### Promoting a user to Admin
+
+By default, registered users only have the **User** role. To test admin endpoints, assign the Admin role in SQL Server:
+
+```sql
+-- Replace with your user's Id and the Admin role Id from the Roles table
+INSERT INTO UserRoles (UserId, RoleId)
+SELECT u.Id, r.Id
+FROM Users u, Roles r
+WHERE u.Email = 'admin@example.com' AND r.Name = 'Admin';
+```
+
+Log in again to receive a new access token that includes the `Admin` role claim.
 
 ### Token expiration
 

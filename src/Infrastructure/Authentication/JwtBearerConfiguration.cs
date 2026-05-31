@@ -65,7 +65,7 @@ public static class JwtBearerConfiguration
             };
         });
 
-        services.AddAuthorization();
+        services.AddAuthorizationPolicies();
 
         return services;
     }

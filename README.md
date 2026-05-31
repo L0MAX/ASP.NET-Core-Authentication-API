@@ -20,6 +20,10 @@ src/
 ## Quick Start
 
 ```bash
+# Configure environment variables
+cp .env.example .env
+# Edit .env with your SQL Server password and JWT secret
+
 # Restore and build
 dotnet restore CleanArchitecture.sln
 dotnet build CleanArchitecture.sln
@@ -37,20 +41,21 @@ Open Swagger UI at `https://localhost:5001/swagger`.
 
 ## Configuration
 
-Update `src/Api/appsettings.json`:
-
-| Section | Purpose |
-|---------|---------|
-| `ConnectionStrings:DefaultConnection` | SQL Server connection string |
-| `JwtSettings` | JWT issuer, audience, secret, token lifetime |
-| `Serilog` | Structured logging (console + rolling file) |
-
-**Important:** Replace the JWT secret and SQL password before deploying to production. Use User Secrets or environment variables for local development:
+Secrets and environment-specific values live in `.env` (gitignored). Copy from the template:
 
 ```bash
-dotnet user-secrets init --project src/Api/Api.csproj
-dotnet user-secrets set "JwtSettings:Secret" "your-production-secret-at-least-32-chars" --project src/Api/Api.csproj
+cp .env.example .env
 ```
+
+| Variable | Purpose |
+|----------|---------|
+| `ConnectionStrings__DefaultConnection` | SQL Server connection string |
+| `JwtSettings__Secret` | JWT signing key (min. 32 characters) |
+| `JwtSettings__Issuer` / `JwtSettings__Audience` | JWT token validation |
+| `JwtSettings__ExpirationInMinutes` | Token lifetime |
+| `ASPNETCORE_ENVIRONMENT` | `Development`, `Staging`, or `Production` |
+
+Non-secret defaults (Serilog, etc.) remain in `src/Api/appsettings.json`. Environment variables from `.env` override those values at runtime and during EF migrations.
 
 ## Migrations
 

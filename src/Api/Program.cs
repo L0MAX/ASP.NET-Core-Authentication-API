@@ -1,5 +1,8 @@
 using Api.Extensions;
+using DotNetEnv;
 using Serilog;
+
+Env.TraversePath().Load();
 
 var builder = WebApplication.CreateBuilder(args);
 

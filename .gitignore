@@ -21,6 +21,7 @@ logs/
 Thumbs.db
 
 ## Secrets
+.env
 appsettings.Local.json
 *.pfx
 

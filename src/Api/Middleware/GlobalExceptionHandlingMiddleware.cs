@@ -47,6 +47,10 @@ public class GlobalExceptionHandlingMiddleware
                 HttpStatusCode.Unauthorized,
                 unauthorized.Message,
                 null),
+            ForbiddenException forbidden => (
+                HttpStatusCode.Forbidden,
+                forbidden.Message,
+                null),
             ConflictException conflict => (
                 HttpStatusCode.Conflict,
                 conflict.Message,

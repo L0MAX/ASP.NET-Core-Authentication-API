@@ -80,6 +80,7 @@ Open Swagger UI at `https://localhost:5001/swagger`.
 |--------|-------|------|-------------|
 | `GET` | `/api/health` | No | Health check |
 | `POST` | `/api/auth/register` | No | Register user, send email verification |
+| `POST` | `/api/auth/confirm-email` | No | Verify email with token from registration |
 | `POST` | `/api/auth/login` | No | Login and receive JWT tokens |
 | `POST` | `/api/auth/forgot-password` | No | Request password reset email |
 | `POST` | `/api/auth/reset-password` | No | Reset password with token |
@@ -130,7 +131,25 @@ curl -X POST https://localhost:5001/api/auth/register \
 
 > **Development:** Verification and reset tokens are logged to the console by `EmailService` (no real SMTP configured).
 
-### Login
+### Confirm email (`POST /api/auth/confirm-email`)
+
+Required before login. Use the token from the registration email (or API logs in development).
+
+```bash
+curl -X POST https://localhost:5001/api/auth/confirm-email \
+  -H "Content-Type: application/json" \
+  -d '{"email": "jane@example.com", "token": "<verification_token>"}'
+```
+
+### Login (`POST /api/auth/login`)
+
+1. Validates request (email format, password required)
+2. Looks up user by email
+3. Verifies password hash
+4. Requires email to be confirmed
+5. Generates JWT access token (15 min) and refresh token (7 days)
+6. Persists refresh token to the database
+7. Returns `AuthResponse`
 
 ```bash
 curl -X POST https://localhost:5001/api/auth/login \
@@ -138,7 +157,37 @@ curl -X POST https://localhost:5001/api/auth/login \
   -d '{"email": "jane@example.com", "password": "Password1"}'
 ```
 
-Returns `AuthResponse` with `accessToken`, `refreshToken`, `accessTokenExpiresAt`, and `user`.
+**Success response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "accessToken": "eyJ...",
+    "refreshToken": "base64...",
+    "accessTokenExpiresAt": "2026-05-31T12:15:00Z",
+    "user": {
+      "id": "...",
+      "firstName": "Jane",
+      "lastName": "Doe",
+      "email": "jane@example.com",
+      "emailConfirmed": true,
+      "roles": ["User"]
+    }
+  },
+  "message": "Login successful."
+}
+```
+
+**Error responses:**
+
+| Status | Condition | Message |
+|--------|-----------|---------|
+| `400` | Invalid request body | Validation errors (e.g. `"Email is required."`) |
+| `401` | Unknown email or wrong password | `"Invalid email or password."` |
+| `403` | Email not verified | `"Please verify your email address before logging in."` |
+
+> Invalid email and wrong password return the same `401` message to prevent account enumeration.
 
 ### Get current user
 

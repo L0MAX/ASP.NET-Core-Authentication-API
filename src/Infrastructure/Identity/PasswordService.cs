@@ -31,4 +31,15 @@ public sealed class PasswordService : IPasswordService
         return result is PasswordVerificationResult.Success
             or PasswordVerificationResult.SuccessRehashNeeded;
     }
+
+    public string? GetUpgradedHashIfNeeded(string password, string passwordHash)
+    {
+        var result = _hasher.VerifyHashedPassword(user: null!, passwordHash, password);
+
+        return result switch
+        {
+            PasswordVerificationResult.SuccessRehashNeeded => HashPassword(password),
+            _ => null
+        };
+    }
 }

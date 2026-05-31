@@ -20,6 +20,7 @@ public class AuthController : ControllerBase
     private readonly IValidator<ForgotPasswordRequest> _forgotPasswordValidator;
     private readonly IValidator<ResetPasswordRequest> _resetPasswordValidator;
     private readonly IValidator<RefreshTokenRequest> _refreshTokenValidator;
+    private readonly IValidator<ConfirmEmailRequest> _confirmEmailValidator;
 
     public AuthController(
         IAuthService authService,
@@ -27,7 +28,8 @@ public class AuthController : ControllerBase
         IValidator<LoginRequest> loginValidator,
         IValidator<ForgotPasswordRequest> forgotPasswordValidator,
         IValidator<ResetPasswordRequest> resetPasswordValidator,
-        IValidator<RefreshTokenRequest> refreshTokenValidator)
+        IValidator<RefreshTokenRequest> refreshTokenValidator,
+        IValidator<ConfirmEmailRequest> confirmEmailValidator)
     {
         _authService = authService;
         _registerValidator = registerValidator;
@@ -35,6 +37,7 @@ public class AuthController : ControllerBase
         _forgotPasswordValidator = forgotPasswordValidator;
         _resetPasswordValidator = resetPasswordValidator;
         _refreshTokenValidator = refreshTokenValidator;
+        _confirmEmailValidator = confirmEmailValidator;
     }
 
     [HttpPost("register")]
@@ -59,6 +62,7 @@ public class AuthController : ControllerBase
     [ProducesResponseType(typeof(ApiResponse<AuthResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> Login(
         [FromBody] LoginRequest request,
         CancellationToken cancellationToken)
@@ -67,6 +71,21 @@ public class AuthController : ControllerBase
 
         var result = await _authService.LoginAsync(request, cancellationToken);
         return Ok(ApiResponse<AuthResponse>.Ok(result, "Login successful."));
+    }
+
+    [HttpPost("confirm-email")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> ConfirmEmail(
+        [FromBody] ConfirmEmailRequest request,
+        CancellationToken cancellationToken)
+    {
+        await _confirmEmailValidator.ValidateAndThrowAsync(request, cancellationToken);
+
+        await _authService.ConfirmEmailAsync(request, cancellationToken);
+        return Ok(ApiResponse<object>.Ok(null!, "Email verified successfully. You can now log in."));
     }
 
     [HttpPost("forgot-password")]

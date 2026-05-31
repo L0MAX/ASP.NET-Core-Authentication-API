@@ -39,7 +39,7 @@ public class AuthController : ControllerBase
 
     [HttpPost("register")]
     [AllowAnonymous]
-    [ProducesResponseType(typeof(ApiResponse<AuthResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<RegisterResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Register(
@@ -49,7 +49,9 @@ public class AuthController : ControllerBase
         await _registerValidator.ValidateAndThrowAsync(request, cancellationToken);
 
         var result = await _authService.RegisterAsync(request, cancellationToken);
-        return Ok(ApiResponse<AuthResponse>.Ok(result, "Registration successful."));
+        return Ok(ApiResponse<RegisterResponse>.Ok(
+            result,
+            "Registration successful. Please check your email to verify your account."));
     }
 
     [HttpPost("login")]

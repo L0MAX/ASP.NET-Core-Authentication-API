@@ -1,15 +1,15 @@
 # Clean Architecture ASP.NET Core 9 Web API
 
-Production-ready ASP.NET Core 9 Web API scaffold using Clean Architecture, with an authentication domain model (User, Role, RefreshToken), JWT infrastructure, and SQL Server via EF Core.
+Production-ready ASP.NET Core 9 Web API using Clean Architecture — authentication domain model, CQRS application layer, JWT, ASP.NET Core password hashing, and SQL Server via EF Core.
 
 ## Project Structure
 
 ```
 src/
 ├── Api/              # HTTP entry point — controllers, middleware, Swagger, Serilog
-├── Application/      # Use cases, interfaces, DTOs, application services
+├── Application/      # CQRS commands/queries, DTOs, validators, interfaces
 ├── Domain/           # Entities, domain rules (zero external dependencies)
-└── Infrastructure/   # EF Core, SQL Server, JWT, persistence configurations
+└── Infrastructure/   # EF Core, SQL Server, JWT, email, password hashing
 ```
 
 ### Domain Layer (Authentication)
@@ -26,6 +26,19 @@ src/
 - `User` ↔ `Role` — many-to-many via the `UserRoles` join table
 
 Domain entities use private setters and factory/method-based state changes (`User.Create()`, `AssignRole()`, `IssueRefreshToken()`, etc.).
+
+### Application Layer
+
+Organized with **CQRS** (MediatR) and **FluentValidation**:
+
+```
+Auth/
+├── Commands/     Register, Login, ForgotPassword, ResetPassword, RefreshToken
+├── Queries/      GetUserById
+├── DTOs/         Requests + Responses
+├── Validators/   Request and command validators
+└── Services/     AuthService (facade over MediatR)
+```
 
 ## Prerequisites
 
@@ -59,19 +72,30 @@ dotnet run --project src/Api/Api.csproj
 
 Open Swagger UI at `https://localhost:5001/swagger`.
 
+> Migrations and default role seeding also run automatically on startup.
+
 ## API Endpoints
 
 | Method | Route | Auth | Description |
 |--------|-------|------|-------------|
 | `GET` | `/api/health` | No | Health check |
-| `POST` | `/api/auth/register` | No | Register a new user |
-| `POST` | `/api/auth/login` | No | Login and receive tokens |
+| `POST` | `/api/auth/register` | No | Register user, send email verification |
+| `POST` | `/api/auth/login` | No | Login and receive JWT tokens |
 | `POST` | `/api/auth/forgot-password` | No | Request password reset email |
 | `POST` | `/api/auth/reset-password` | No | Reset password with token |
 | `POST` | `/api/auth/refresh-token` | No | Rotate refresh token |
 | `GET` | `/api/auth/me` | Bearer | Get current user profile |
 
-### Example: Register
+All endpoints return a wrapped `ApiResponse<T>` with `success`, `data`, and `message` fields.
+
+### Registration (`POST /api/auth/register`)
+
+1. Validates request (FluentValidation)
+2. Checks for duplicate email → `409 Conflict`
+3. Hashes password (ASP.NET Core `PasswordHasher`)
+4. Saves user and assigns default `User` role
+5. Generates email verification token (24h) and sends confirmation email
+6. Returns user profile — **no JWT tokens** until the user logs in
 
 ```bash
 curl -X POST https://localhost:5001/api/auth/register \
@@ -85,7 +109,28 @@ curl -X POST https://localhost:5001/api/auth/register \
   }'
 ```
 
-### Example: Login
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "user": {
+      "id": "...",
+      "firstName": "Jane",
+      "lastName": "Doe",
+      "email": "jane@example.com",
+      "emailConfirmed": false,
+      "roles": ["User"]
+    }
+  },
+  "message": "Registration successful. Please check your email to verify your account."
+}
+```
+
+> **Development:** Verification and reset tokens are logged to the console by `EmailService` (no real SMTP configured).
+
+### Login
 
 ```bash
 curl -X POST https://localhost:5001/api/auth/login \
@@ -93,14 +138,37 @@ curl -X POST https://localhost:5001/api/auth/login \
   -d '{"email": "jane@example.com", "password": "Password1"}'
 ```
 
-### Example: Get current user
+Returns `AuthResponse` with `accessToken`, `refreshToken`, `accessTokenExpiresAt`, and `user`.
+
+### Get current user
 
 ```bash
 curl https://localhost:5001/api/auth/me \
   -H "Authorization: Bearer <access_token>"
 ```
 
-All endpoints return a wrapped `ApiResponse<T>` with `success`, `data`, and `message` fields.
+## Authentication
+
+### JWT claims
+
+| Claim | Description |
+|-------|-------------|
+| `userId` | User identifier |
+| `email` | User email |
+| `role` | One claim per role (e.g. `User`, `Admin`) |
+
+### Token expiration
+
+| Token | Lifetime | Storage | Purpose |
+|-------|----------|---------|---------|
+| **Access token** | 15 minutes | Client only | Sent on every API request |
+| **Refresh token** | 7 days | Database (`RefreshTokens`) | Obtain new access token via `/api/auth/refresh-token` |
+
+Access tokens are short-lived to limit exposure if stolen. Refresh tokens are stored server-side, rotated on use, and revoked on password reset.
+
+### Password hashing
+
+`PasswordService` uses ASP.NET Core Identity's `PasswordHasher<User>` (PBKDF2, per-password salt, 100k iterations).
 
 ## Configuration
 
@@ -115,17 +183,15 @@ cp .env.example .env
 | `ConnectionStrings__DefaultConnection` | SQL Server connection string |
 | `JwtSettings__Secret` | JWT signing key (min. 32 characters) |
 | `JwtSettings__Issuer` / `JwtSettings__Audience` | JWT token validation |
-| `JwtSettings__AccessTokenExpirationMinutes` | Access token lifetime (default: 15 minutes) |
-| `JwtSettings__RefreshTokenExpirationInDays` | Refresh token lifetime (default: 7 days) |
+| `JwtSettings__AccessTokenExpirationMinutes` | Access token lifetime (default: 15) |
+| `JwtSettings__RefreshTokenExpirationInDays` | Refresh token lifetime (default: 7) |
 | `ASPNETCORE_ENVIRONMENT` | `Development`, `Staging`, or `Production` |
 
-Non-secret defaults (Serilog, etc.) remain in `src/Api/appsettings.json`. Environment variables from `.env` override those values at runtime and during EF migrations.
+Non-secret defaults remain in `src/Api/appsettings.json`. Environment variables from `.env` override those values at runtime and during EF migrations.
 
-> **Docker note:** If you use the Docker command below, set `MSSQL_SA_PASSWORD` to the same value as the password in your `.env` connection string.
+> **Docker note:** Set `MSSQL_SA_PASSWORD` to the same value as the password in your `.env` connection string.
 
 ## Database Schema
-
-Migrations create the following tables:
 
 | Table | Purpose |
 |-------|---------|
@@ -152,63 +218,46 @@ Migrations create the following tables:
 
 ### Migration Commands
 
-Install the EF Core CLI (once):
-
 ```bash
+# Install EF Core CLI (once)
 dotnet tool install --global dotnet-ef
-```
 
-Apply all pending migrations:
-
-```bash
+# Apply all pending migrations
 dotnet ef database update \
   --project src/Infrastructure/Infrastructure.csproj \
   --startup-project src/Api/Api.csproj
-```
 
-Add a new migration after model changes:
-
-```bash
+# Add a new migration
 dotnet ef migrations add YourMigrationName \
   --project src/Infrastructure/Infrastructure.csproj \
   --startup-project src/Api/Api.csproj \
   --output-dir Persistence/Migrations
-```
 
-Remove the last migration (if not applied to the database):
-
-```bash
+# Remove last migration (if not applied)
 dotnet ef migrations remove \
   --project src/Infrastructure/Infrastructure.csproj \
   --startup-project src/Api/Api.csproj
-```
 
-Generate a SQL script (all migrations):
-
-```bash
+# Generate SQL script
 dotnet ef migrations script \
   --project src/Infrastructure/Infrastructure.csproj \
   --startup-project src/Api/Api.csproj \
   --output migrations.sql
-```
 
-List migrations:
-
-```bash
+# List migrations
 dotnet ef migrations list \
   --project src/Infrastructure/Infrastructure.csproj \
   --startup-project src/Api/Api.csproj
 ```
 
-> Migrations also run automatically on startup via `ApplyMigrationsAndSeedAsync()` in `Program.cs`.
-
-## Migrations History
+### Migrations History
 
 | Migration | Description |
 |-----------|-------------|
 | `InitialCreate` | Creates `Users` table |
 | `AddAuthEntities` | Adds `Roles`, `RefreshTokens`, `UserRoles`; updates `Users` |
 | `SeedDefaultRoles` | Inserts `Admin` and `User` roles (idempotent) |
+
 ## Docker SQL Server
 
 ```bash

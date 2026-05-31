@@ -6,26 +6,33 @@ using Application.Common.Interfaces;
 using Domain.Constants;
 using Domain.Entities;
 using MediatR;
+using Microsoft.Extensions.Logging;
 
 namespace Application.Auth.Commands.Register;
 
-public sealed class RegisterCommandHandler : IRequestHandler<RegisterCommand, AuthResponse>
+public sealed class RegisterCommandHandler : IRequestHandler<RegisterCommand, RegisterResponse>
 {
     private readonly IUserRepository _userRepository;
     private readonly IPasswordService _passwordService;
-    private readonly IJwtService _jwtService;
+    private readonly IEmailVerificationTokenProvider _verificationTokenProvider;
+    private readonly IEmailService _emailService;
+    private readonly ILogger<RegisterCommandHandler> _logger;
 
     public RegisterCommandHandler(
         IUserRepository userRepository,
         IPasswordService passwordService,
-        IJwtService jwtService)
+        IEmailVerificationTokenProvider verificationTokenProvider,
+        IEmailService emailService,
+        ILogger<RegisterCommandHandler> logger)
     {
         _userRepository = userRepository;
         _passwordService = passwordService;
-        _jwtService = jwtService;
+        _verificationTokenProvider = verificationTokenProvider;
+        _emailService = emailService;
+        _logger = logger;
     }
 
-    public async Task<AuthResponse> Handle(RegisterCommand request, CancellationToken cancellationToken)
+    public async Task<RegisterResponse> Handle(RegisterCommand request, CancellationToken cancellationToken)
     {
         var normalizedEmail = request.Email.Trim().ToLowerInvariant();
 
@@ -45,17 +52,17 @@ public sealed class RegisterCommandHandler : IRequestHandler<RegisterCommand, Au
 
         user.AssignRole(defaultRole);
 
-        var refreshTokenValue = _jwtService.GenerateRefreshToken();
-        user.IssueRefreshToken(refreshTokenValue, _jwtService.GetRefreshTokenExpiry());
-
         await _userRepository.AddAsync(user, cancellationToken);
         await _userRepository.SaveChangesAsync(cancellationToken);
 
-        return new AuthResponse
+        var verificationToken = await _verificationTokenProvider.GenerateTokenAsync(user.Id, cancellationToken);
+
+        await _emailService.SendEmailConfirmationAsync(user.Email, verificationToken, cancellationToken);
+
+        _logger.LogInformation("User {UserId} registered. Verification email sent to {Email}", user.Id, user.Email);
+
+        return new RegisterResponse
         {
-            AccessToken = _jwtService.GenerateAccessToken(user),
-            RefreshToken = refreshTokenValue,
-            AccessTokenExpiresAt = _jwtService.GetAccessTokenExpiry(),
             User = user.ToResponse()
         };
     }

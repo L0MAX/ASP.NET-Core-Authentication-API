@@ -20,7 +20,7 @@ public sealed class AuthService : IAuthService
         _mediator = mediator;
     }
 
-    public Task<AuthResponse> RegisterAsync(RegisterRequest request, CancellationToken cancellationToken = default) =>
+    public Task<RegisterResponse> RegisterAsync(RegisterRequest request, CancellationToken cancellationToken = default) =>
         _mediator.Send(
             new RegisterCommand(request.FirstName, request.LastName, request.Email, request.Password),
             cancellationToken);

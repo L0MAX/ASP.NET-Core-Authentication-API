@@ -40,6 +40,7 @@ public static class DependencyInjection
         services.AddScoped<IPasswordService, PasswordService>();
         services.AddScoped<IEmailService, EmailService>();
         services.AddSingleton<IPasswordResetTokenProvider, PasswordResetTokenProvider>();
+        services.AddSingleton<IEmailVerificationTokenProvider, EmailVerificationTokenProvider>();
 
         services.AddJwtAuthentication(configuration);
 

@@ -20,7 +20,8 @@ public class AuthController : ControllerBase
     private readonly IValidator<ForgotPasswordRequest> _forgotPasswordValidator;
     private readonly IValidator<ResetPasswordRequest> _resetPasswordValidator;
     private readonly IValidator<RefreshTokenRequest> _refreshTokenValidator;
-    private readonly IValidator<ConfirmEmailRequest> _confirmEmailValidator;
+    private readonly IValidator<SendVerificationRequest> _sendVerificationValidator;
+    private readonly IValidator<VerifyEmailRequest> _verifyEmailValidator;
 
     public AuthController(
         IAuthService authService,
@@ -29,7 +30,8 @@ public class AuthController : ControllerBase
         IValidator<ForgotPasswordRequest> forgotPasswordValidator,
         IValidator<ResetPasswordRequest> resetPasswordValidator,
         IValidator<RefreshTokenRequest> refreshTokenValidator,
-        IValidator<ConfirmEmailRequest> confirmEmailValidator)
+        IValidator<SendVerificationRequest> sendVerificationValidator,
+        IValidator<VerifyEmailRequest> verifyEmailValidator)
     {
         _authService = authService;
         _registerValidator = registerValidator;
@@ -37,7 +39,8 @@ public class AuthController : ControllerBase
         _forgotPasswordValidator = forgotPasswordValidator;
         _resetPasswordValidator = resetPasswordValidator;
         _refreshTokenValidator = refreshTokenValidator;
-        _confirmEmailValidator = confirmEmailValidator;
+        _sendVerificationValidator = sendVerificationValidator;
+        _verifyEmailValidator = verifyEmailValidator;
     }
 
     [HttpPost("register")]
@@ -73,18 +76,35 @@ public class AuthController : ControllerBase
         return Ok(ApiResponse<AuthResponse>.Ok(result, "Login successful."));
     }
 
-    [HttpPost("confirm-email")]
+    [HttpPost("send-verification")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> SendVerification(
+        [FromBody] SendVerificationRequest request,
+        CancellationToken cancellationToken)
+    {
+        await _sendVerificationValidator.ValidateAndThrowAsync(request, cancellationToken);
+
+        await _authService.SendVerificationAsync(request, cancellationToken);
+        return Ok(ApiResponse<object>.Ok(
+            null!,
+            "If the email exists and is not yet verified, a verification link has been sent."));
+    }
+
+    [HttpPost("verify-email")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> ConfirmEmail(
-        [FromBody] ConfirmEmailRequest request,
+    public async Task<IActionResult> VerifyEmail(
+        [FromBody] VerifyEmailRequest request,
         CancellationToken cancellationToken)
     {
-        await _confirmEmailValidator.ValidateAndThrowAsync(request, cancellationToken);
+        await _verifyEmailValidator.ValidateAndThrowAsync(request, cancellationToken);
 
-        await _authService.ConfirmEmailAsync(request, cancellationToken);
+        await _authService.VerifyEmailAsync(request, cancellationToken);
         return Ok(ApiResponse<object>.Ok(null!, "Email verified successfully. You can now log in."));
     }
 

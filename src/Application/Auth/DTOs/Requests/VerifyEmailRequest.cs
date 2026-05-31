@@ -1,6 +1,6 @@
 namespace Application.Auth.DTOs.Requests;
 
-public class ConfirmEmailRequest
+public class VerifyEmailRequest
 {
     public string Email { get; set; } = string.Empty;
 

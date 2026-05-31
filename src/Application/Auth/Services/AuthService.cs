@@ -1,10 +1,11 @@
 using Application.Auth.DTOs.Requests;
-using Application.Auth.Commands.ConfirmEmail;
 using Application.Auth.Commands.ForgotPassword;
 using Application.Auth.Commands.Login;
 using Application.Auth.Commands.RefreshToken;
 using Application.Auth.Commands.Register;
 using Application.Auth.Commands.ResetPassword;
+using Application.Auth.Commands.SendVerification;
+using Application.Auth.Commands.VerifyEmail;
 using Application.Auth.DTOs.Responses;
 using Application.Auth.Queries.GetUserById;
 using Application.Common.Interfaces;
@@ -37,8 +38,11 @@ public sealed class AuthService : IAuthService
             new ResetPasswordCommand(request.Email, request.Token, request.NewPassword),
             cancellationToken);
 
-    public Task ConfirmEmailAsync(ConfirmEmailRequest request, CancellationToken cancellationToken = default) =>
-        _mediator.Send(new ConfirmEmailCommand(request.Email, request.Token), cancellationToken);
+    public Task SendVerificationAsync(SendVerificationRequest request, CancellationToken cancellationToken = default) =>
+        _mediator.Send(new SendVerificationCommand(request.Email), cancellationToken);
+
+    public Task VerifyEmailAsync(VerifyEmailRequest request, CancellationToken cancellationToken = default) =>
+        _mediator.Send(new VerifyEmailCommand(request.Email, request.Token), cancellationToken);
 
     public Task<AuthResponse> RefreshTokenAsync(RefreshTokenRequest request, CancellationToken cancellationToken = default) =>
         _mediator.Send(new RefreshTokenCommand(request.RefreshToken), cancellationToken);

@@ -55,7 +55,7 @@ public sealed class RegisterCommandHandler : IRequestHandler<RegisterCommand, Re
         await _userRepository.AddAsync(user, cancellationToken);
         await _userRepository.SaveChangesAsync(cancellationToken);
 
-        var verificationToken = await _verificationTokenProvider.GenerateTokenAsync(user.Id, cancellationToken);
+        var verificationToken = await _verificationTokenProvider.GenerateAndStoreTokenAsync(user.Id, cancellationToken);
 
         await _emailService.SendEmailConfirmationAsync(user.Email, verificationToken, cancellationToken);
 

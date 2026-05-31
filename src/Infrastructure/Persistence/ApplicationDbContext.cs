@@ -22,6 +22,8 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
 
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
+    public DbSet<EmailVerificationToken> EmailVerificationTokens => Set<EmailVerificationToken>();
+
     IQueryable<User> IApplicationDbContext.Users => Users.AsNoTracking();
 
     IQueryable<Role> IApplicationDbContext.Roles => Roles.AsNoTracking();

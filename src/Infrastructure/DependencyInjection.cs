@@ -17,6 +17,7 @@ public static class DependencyInjection
         IConfiguration configuration)
     {
         services.Configure<JwtSettings>(configuration.GetSection(JwtSettings.SectionName));
+        services.Configure<EmailVerificationSettings>(configuration.GetSection(EmailVerificationSettings.SectionName));
 
         services.AddMemoryCache();
 
@@ -39,8 +40,9 @@ public static class DependencyInjection
         services.AddScoped<IJwtService, JwtService>();
         services.AddScoped<IPasswordService, PasswordService>();
         services.AddScoped<IEmailService, EmailService>();
+        services.AddScoped<IEmailVerificationTokenRepository, EmailVerificationTokenRepository>();
+        services.AddScoped<IEmailVerificationTokenProvider, EmailVerificationTokenProvider>();
         services.AddSingleton<IPasswordResetTokenProvider, PasswordResetTokenProvider>();
-        services.AddSingleton<IEmailVerificationTokenProvider, EmailVerificationTokenProvider>();
 
         services.AddJwtAuthentication(configuration);
 

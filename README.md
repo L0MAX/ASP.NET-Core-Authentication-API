@@ -80,7 +80,8 @@ Open Swagger UI at `https://localhost:5001/swagger`.
 |--------|-------|------|-------------|
 | `GET` | `/api/health` | No | Health check |
 | `POST` | `/api/auth/register` | No | Register user, send email verification |
-| `POST` | `/api/auth/confirm-email` | No | Verify email with token from registration |
+| `POST` | `/api/auth/send-verification` | No | Resend email verification link |
+| `POST` | `/api/auth/verify-email` | No | Verify email with token |
 | `POST` | `/api/auth/login` | No | Login and receive JWT tokens |
 | `POST` | `/api/auth/forgot-password` | No | Request password reset email |
 | `POST` | `/api/auth/reset-password` | No | Reset password with token |
@@ -95,7 +96,7 @@ All endpoints return a wrapped `ApiResponse<T>` with `success`, `data`, and `mes
 2. Checks for duplicate email → `409 Conflict`
 3. Hashes password (ASP.NET Core `PasswordHasher`)
 4. Saves user and assigns default `User` role
-5. Generates email verification token (24h) and sends confirmation email
+5. Generates email verification token (24h, stored hashed in DB) and sends confirmation email
 6. Returns user profile — **no JWT tokens** until the user logs in
 
 ```bash
@@ -131,15 +132,37 @@ curl -X POST https://localhost:5001/api/auth/register \
 
 > **Development:** Verification and reset tokens are logged to the console by `EmailService` (no real SMTP configured).
 
-### Confirm email (`POST /api/auth/confirm-email`)
+### Send verification (`POST /api/auth/send-verification`)
 
-Required before login. Use the token from the registration email (or API logs in development).
+Resend a verification email for unconfirmed accounts. Returns success even if the email is unknown (prevents enumeration).
 
 ```bash
-curl -X POST https://localhost:5001/api/auth/confirm-email \
+curl -X POST https://localhost:5001/api/auth/send-verification \
+  -H "Content-Type: application/json" \
+  -d '{"email": "jane@example.com"}'
+```
+
+| Status | Condition | Message |
+|--------|-----------|---------|
+| `200` | Request accepted | `"If the email exists and is not yet verified, a verification link has been sent."` |
+| `409` | Email already verified | `"Email address is already verified."` |
+
+### Verify email (`POST /api/auth/verify-email`)
+
+Required before login. Invalidates the token after use (one-time).
+
+```bash
+curl -X POST https://localhost:5001/api/auth/verify-email \
   -H "Content-Type: application/json" \
   -d '{"email": "jane@example.com", "token": "<verification_token>"}'
 ```
+
+| Status | Condition | Message |
+|--------|-----------|---------|
+| `200` | Success | `"Email verified successfully. You can now log in."` |
+| `401` | Invalid or expired token | `"Invalid or expired email verification token."` |
+
+**Security:** Plain tokens are sent by email only. Only an HMAC-SHA256 hash is stored in `EmailVerificationTokens`. Tokens expire after 24 hours (configurable). Issuing a new token invalidates previous unused tokens for that user.
 
 ### Login (`POST /api/auth/login`)
 
@@ -269,6 +292,7 @@ cp .env.example .env
 | `JwtSettings__Issuer` / `JwtSettings__Audience` | JWT token validation |
 | `JwtSettings__AccessTokenExpirationMinutes` | Access token lifetime (default: 15) |
 | `JwtSettings__RefreshTokenExpirationInDays` | Refresh token lifetime (default: 7) |
+| `EmailVerificationSettings__TokenExpirationHours` | Email verification token lifetime (default: 24) |
 | `ASPNETCORE_ENVIRONMENT` | `Development`, `Staging`, or `Production` |
 
 Non-secret defaults remain in `src/Api/appsettings.json`. Environment variables from `.env` override those values at runtime and during EF migrations.
@@ -283,6 +307,7 @@ Non-secret defaults remain in `src/Api/appsettings.json`. Environment variables 
 | `Roles` | Authorization roles |
 | `UserRoles` | Many-to-many join between users and roles |
 | `RefreshTokens` | Refresh tokens linked to users (cascade delete) |
+| `EmailVerificationTokens` | Hashed one-time email verification tokens (cascade delete) |
 
 ## Entity Framework Core
 
@@ -341,6 +366,7 @@ dotnet ef migrations list \
 | `InitialCreate` | Creates `Users` table |
 | `AddAuthEntities` | Adds `Roles`, `RefreshTokens`, `UserRoles`; updates `Users` |
 | `SeedDefaultRoles` | Inserts `Admin` and `User` roles (idempotent) |
+| `AddEmailVerificationTokens` | Creates `EmailVerificationTokens` table |
 
 ## Docker SQL Server
 

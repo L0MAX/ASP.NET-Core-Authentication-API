@@ -1,36 +1,81 @@
 using System.Security.Cryptography;
+using System.Text;
 using Application.Common.Interfaces;
-using Microsoft.Extensions.Caching.Memory;
+using Domain.Entities;
+using Infrastructure.Authentication;
+using Microsoft.Extensions.Options;
 
 namespace Infrastructure.Identity;
 
 public sealed class EmailVerificationTokenProvider : IEmailVerificationTokenProvider
 {
-    private const string CacheKeyPrefix = "email-verification:";
-    private static readonly TimeSpan TokenLifetime = TimeSpan.FromHours(24);
+    private readonly IEmailVerificationTokenRepository _repository;
+    private readonly JwtSettings _jwtSettings;
+    private readonly EmailVerificationSettings _settings;
 
-    private readonly IMemoryCache _cache;
-
-    public EmailVerificationTokenProvider(IMemoryCache cache)
+    public EmailVerificationTokenProvider(
+        IEmailVerificationTokenRepository repository,
+        IOptions<JwtSettings> jwtSettings,
+        IOptions<EmailVerificationSettings> settings)
     {
-        _cache = cache;
+        _repository = repository;
+        _jwtSettings = jwtSettings.Value;
+        _settings = settings.Value;
     }
 
-    public Task<string> GenerateTokenAsync(Guid userId, CancellationToken cancellationToken = default)
+    public async Task<string> GenerateAndStoreTokenAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default)
     {
-        var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
-        _cache.Set($"{CacheKeyPrefix}{token}", userId, TokenLifetime);
-        return Task.FromResult(token);
+        await InvalidateUserTokensAsync(userId, cancellationToken);
+
+        var plainToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+        var tokenHash = HashToken(plainToken);
+        var expiresAt = DateTime.UtcNow.AddHours(_settings.TokenExpirationHours);
+
+        var entity = EmailVerificationToken.Create(userId, tokenHash, expiresAt);
+        await _repository.AddAsync(entity, cancellationToken);
+        await _repository.SaveChangesAsync(cancellationToken);
+
+        return plainToken;
     }
 
-    public Task<Guid?> ValidateTokenAsync(string token, CancellationToken cancellationToken = default)
+    public async Task InvalidateUserTokensAsync(Guid userId, CancellationToken cancellationToken = default)
     {
-        if (_cache.TryGetValue($"{CacheKeyPrefix}{token}", out Guid userId))
+        await _repository.InvalidateAllForUserAsync(userId, cancellationToken);
+        await _repository.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<Guid?> ValidateAndConsumeTokenAsync(
+        string token,
+        Guid userId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(token))
         {
-            _cache.Remove($"{CacheKeyPrefix}{token}");
-            return Task.FromResult<Guid?>(userId);
+            return null;
         }
 
-        return Task.FromResult<Guid?>(null);
+        var tokenHash = HashToken(token);
+        var storedToken = await _repository.GetValidByHashAsync(tokenHash, userId, cancellationToken);
+
+        if (storedToken is null)
+        {
+            return null;
+        }
+
+        storedToken.MarkUsed();
+        await _repository.SaveChangesAsync(cancellationToken);
+
+        return userId;
+    }
+
+    private string HashToken(string token)
+    {
+        var key = Encoding.UTF8.GetBytes(_jwtSettings.Secret);
+        var tokenBytes = Encoding.UTF8.GetBytes(token);
+
+        using var hmac = new HMACSHA256(key);
+        return Convert.ToBase64String(hmac.ComputeHash(tokenBytes));
     }
 }

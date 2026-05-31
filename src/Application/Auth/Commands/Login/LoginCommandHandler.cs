@@ -10,16 +10,16 @@ namespace Application.Auth.Commands.Login;
 public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, AuthResponse>
 {
     private readonly IUserRepository _userRepository;
-    private readonly IPasswordHasher _passwordHasher;
+    private readonly IPasswordService _passwordService;
     private readonly IJwtService _jwtService;
 
     public LoginCommandHandler(
         IUserRepository userRepository,
-        IPasswordHasher passwordHasher,
+        IPasswordService passwordService,
         IJwtService jwtService)
     {
         _userRepository = userRepository;
-        _passwordHasher = passwordHasher;
+        _passwordService = passwordService;
         _jwtService = jwtService;
     }
 
@@ -28,7 +28,7 @@ public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, AuthResp
         var normalizedEmail = request.Email.Trim().ToLowerInvariant();
         var user = await _userRepository.GetByEmailWithRolesAsync(normalizedEmail, cancellationToken);
 
-        if (user is null || !_passwordHasher.VerifyPassword(request.Password, user.PasswordHash))
+        if (user is null || !_passwordService.VerifyPassword(request.Password, user.PasswordHash))
         {
             throw new UnauthorizedException("Invalid email or password.");
         }

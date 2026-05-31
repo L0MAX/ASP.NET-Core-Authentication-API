@@ -12,16 +12,16 @@ namespace Application.Auth.Commands.Register;
 public sealed class RegisterCommandHandler : IRequestHandler<RegisterCommand, AuthResponse>
 {
     private readonly IUserRepository _userRepository;
-    private readonly IPasswordHasher _passwordHasher;
+    private readonly IPasswordService _passwordService;
     private readonly IJwtService _jwtService;
 
     public RegisterCommandHandler(
         IUserRepository userRepository,
-        IPasswordHasher passwordHasher,
+        IPasswordService passwordService,
         IJwtService jwtService)
     {
         _userRepository = userRepository;
-        _passwordHasher = passwordHasher;
+        _passwordService = passwordService;
         _jwtService = jwtService;
     }
 
@@ -41,7 +41,7 @@ public sealed class RegisterCommandHandler : IRequestHandler<RegisterCommand, Au
             request.FirstName,
             request.LastName,
             normalizedEmail,
-            _passwordHasher.HashPassword(request.Password));
+            _passwordService.HashPassword(request.Password));
 
         user.AssignRole(defaultRole);
 

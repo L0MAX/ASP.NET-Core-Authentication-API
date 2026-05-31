@@ -40,7 +40,7 @@ public static class DependencyInjection
 
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IJwtService, JwtService>();
-        services.AddScoped<IPasswordHasher, PasswordHasher>();
+        services.AddScoped<IPasswordService, PasswordService>();
         services.AddScoped<IEmailService, EmailService>();
         services.AddSingleton<IPasswordResetTokenProvider, PasswordResetTokenProvider>();
 

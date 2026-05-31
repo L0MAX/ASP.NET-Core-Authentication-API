@@ -8,16 +8,16 @@ namespace Application.Auth.Commands.ResetPassword;
 public sealed class ResetPasswordCommandHandler : IRequestHandler<ResetPasswordCommand>
 {
     private readonly IUserRepository _userRepository;
-    private readonly IPasswordHasher _passwordHasher;
+    private readonly IPasswordService _passwordService;
     private readonly IPasswordResetTokenProvider _tokenProvider;
 
     public ResetPasswordCommandHandler(
         IUserRepository userRepository,
-        IPasswordHasher passwordHasher,
+        IPasswordService passwordService,
         IPasswordResetTokenProvider tokenProvider)
     {
         _userRepository = userRepository;
-        _passwordHasher = passwordHasher;
+        _passwordService = passwordService;
         _tokenProvider = tokenProvider;
     }
 
@@ -38,7 +38,7 @@ public sealed class ResetPasswordCommandHandler : IRequestHandler<ResetPasswordC
             throw new UnauthorizedException("Invalid or expired password reset token.");
         }
 
-        user.UpdatePassword(_passwordHasher.HashPassword(request.NewPassword));
+        user.UpdatePassword(_passwordService.HashPassword(request.NewPassword));
         user.RevokeAllRefreshTokens();
 
         await _userRepository.SaveChangesAsync(cancellationToken);

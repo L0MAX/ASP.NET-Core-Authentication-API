@@ -1,6 +1,6 @@
 namespace Application.Common.Interfaces;
 
-public interface IPasswordHasher
+public interface IPasswordService
 {
     string HashPassword(string password);
 

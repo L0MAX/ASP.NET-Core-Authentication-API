@@ -115,7 +115,8 @@ cp .env.example .env
 | `ConnectionStrings__DefaultConnection` | SQL Server connection string |
 | `JwtSettings__Secret` | JWT signing key (min. 32 characters) |
 | `JwtSettings__Issuer` / `JwtSettings__Audience` | JWT token validation |
-| `JwtSettings__ExpirationInMinutes` | Access token lifetime |
+| `JwtSettings__AccessTokenExpirationMinutes` | Access token lifetime (default: 15 minutes) |
+| `JwtSettings__RefreshTokenExpirationInDays` | Refresh token lifetime (default: 7 days) |
 | `ASPNETCORE_ENVIRONMENT` | `Development`, `Staging`, or `Production` |
 
 Non-secret defaults (Serilog, etc.) remain in `src/Api/appsettings.json`. Environment variables from `.env` override those values at runtime and during EF migrations.

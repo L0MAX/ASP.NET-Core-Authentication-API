@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Application.Auth.DTOs.Requests;
 using Application.Auth.DTOs.Responses;
+using Application.Common.Constants;
 using Application.Common.Interfaces;
 using Application.Common.Models;
 using FluentValidation;
@@ -117,8 +118,8 @@ public class AuthController : ControllerBase
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetCurrentUser(CancellationToken cancellationToken)
     {
-        var userIdValue = User.FindFirstValue(ClaimTypes.NameIdentifier)
-            ?? User.FindFirstValue(ClaimTypes.Name)
+        var userIdValue = User.FindFirstValue(JwtClaimTypes.UserId)
+            ?? User.FindFirstValue(ClaimTypes.NameIdentifier)
             ?? User.FindFirstValue("sub");
 
         if (!Guid.TryParse(userIdValue, out var userId))

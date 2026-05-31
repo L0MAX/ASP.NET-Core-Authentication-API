@@ -1,15 +1,12 @@
-using System.Text;
 using Application.Common.Interfaces;
 using Infrastructure.Authentication;
 using Infrastructure.Email;
 using Infrastructure.Identity;
 using Infrastructure.Persistence;
 using Infrastructure.Persistence.Repositories;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.IdentityModel.Tokens;
 
 namespace Infrastructure;
 
@@ -44,30 +41,7 @@ public static class DependencyInjection
         services.AddScoped<IEmailService, EmailService>();
         services.AddSingleton<IPasswordResetTokenProvider, PasswordResetTokenProvider>();
 
-        services.AddAuthentication(options =>
-        {
-            options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-            options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-        })
-        .AddJwtBearer(options =>
-        {
-            var jwtSettings = configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>()
-                ?? throw new InvalidOperationException("JwtSettings section is missing from configuration.");
-
-            options.TokenValidationParameters = new TokenValidationParameters
-            {
-                ValidateIssuer = true,
-                ValidateAudience = true,
-                ValidateLifetime = true,
-                ValidateIssuerSigningKey = true,
-                ValidIssuer = jwtSettings.Issuer,
-                ValidAudience = jwtSettings.Audience,
-                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.Secret)),
-                ClockSkew = TimeSpan.Zero
-            };
-        });
-
-        services.AddAuthorization();
+        services.AddJwtAuthentication(configuration);
 
         return services;
     }

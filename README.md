@@ -10,6 +10,9 @@ src/
 ├── Application/      # CQRS commands/queries, DTOs, validators, interfaces
 ├── Domain/           # Entities, domain rules (zero external dependencies)
 └── Infrastructure/   # EF Core, SQL Server, JWT, email, password hashing
+
+tests/
+└── AuthSystem.UnitTests/   # xUnit + Moq + FluentAssertions
 ```
 
 ### Domain Layer (Authentication)
@@ -786,6 +789,48 @@ docker run -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=YourStrong@Passw0rd" \
 ```
 
 Point `ConnectionStrings__DefaultConnection` in your local `.env` to `Server=localhost,1433;...`.
+
+## Testing
+
+Unit tests use **xUnit**, **Moq**, and **FluentAssertions**. Code coverage is collected with **Coverlet** (80% minimum on auth modules).
+
+### Run tests
+
+```bash
+# Run all tests
+dotnet test CleanArchitecture.sln
+
+# Run with coverage report (auth modules)
+dotnet test CleanArchitecture.sln \
+  --collect:"XPlat Code Coverage" \
+  --settings coverlet.runsettings \
+  --results-directory ./TestResults
+
+# Run a specific test class
+dotnet test tests/AuthSystem.UnitTests --filter "FullyQualifiedName~LoginCommandHandlerTests"
+```
+
+### Test coverage
+
+| Area | Test class | Scenarios |
+|------|------------|-----------|
+| Registration | `RegisterCommandHandlerTests` | Success, duplicate email, missing role, email normalization |
+| Login | `LoginCommandHandlerTests` | Success, invalid credentials, unverified email, password rehash |
+| JWT generation | `JwtServiceTests` | Claims, signing, expiry, refresh token uniqueness |
+| Refresh token | `RefreshTokenCommandHandlerTests` | Rotation, unknown/expired/reused tokens, session revocation |
+| Password hashing | `PasswordServiceTests` | Hash, verify, invalid input, round-trip |
+
+Additional tests cover validators, `ValidationBehavior`, and `UserMapper`.
+
+### Project structure
+
+```
+tests/
+└── AuthSystem.UnitTests/
+    ├── Application/          # Handler, validator, pipeline tests
+    ├── Infrastructure/       # JwtService, PasswordService tests
+    └── Helpers/              # Test data factories
+```
 
 ## Layer Dependencies
 

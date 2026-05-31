@@ -29,3 +29,8 @@ appsettings.Local.json
 *.db
 *.db-shm
 *.db-wal
+
+## Test artifacts
+TestResults/
+coverage/
+*.cobertura.xml

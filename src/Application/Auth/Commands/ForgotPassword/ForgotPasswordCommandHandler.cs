@@ -37,7 +37,9 @@ public sealed class ForgotPasswordCommandHandler : IRequestHandler<ForgotPasswor
             return;
         }
 
-        var resetToken = await _tokenProvider.GenerateTokenAsync(user.Id, cancellationToken);
+        var resetToken = await _tokenProvider.GenerateAndStoreTokenAsync(user.Id, cancellationToken);
         await _emailService.SendPasswordResetEmailAsync(user.Email, resetToken, cancellationToken);
+
+        _logger.LogInformation("Password reset token issued for user {UserId}", user.Id);
     }
 }

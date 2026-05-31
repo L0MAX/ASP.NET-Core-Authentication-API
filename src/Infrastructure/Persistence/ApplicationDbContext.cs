@@ -24,6 +24,8 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
 
     public DbSet<EmailVerificationToken> EmailVerificationTokens => Set<EmailVerificationToken>();
 
+    public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+
     IQueryable<User> IApplicationDbContext.Users => Users.AsNoTracking();
 
     IQueryable<Role> IApplicationDbContext.Roles => Roles.AsNoTracking();

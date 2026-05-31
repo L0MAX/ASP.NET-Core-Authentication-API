@@ -212,6 +212,59 @@ curl -X POST https://localhost:5001/api/auth/login \
 
 > Invalid email and wrong password return the same `401` message to prevent account enumeration.
 
+### Forgot password (`POST /api/auth/forgot-password`)
+
+1. Validates email
+2. Looks up user (returns success even if unknown — **OWASP: no account enumeration**)
+3. Invalidates previous unused reset tokens for that user
+4. Generates cryptographically random token, stores **HMAC-SHA256 hash** in DB (1h expiry)
+5. Emails reset link: `{ResetLinkBaseUrl}?email=...&token=...`
+
+```bash
+curl -X POST https://localhost:5001/api/auth/forgot-password \
+  -H "Content-Type: application/json" \
+  -d '{"email": "jane@example.com"}'
+```
+
+**Response:** Always `200` with `"If the email exists, a password reset link has been sent."` when the email format is valid.
+
+> **Development:** Reset links are logged to the console by `EmailService`.
+
+### Reset password (`POST /api/auth/reset-password`)
+
+1. Validates email, token, and new password (strength rules)
+2. Verifies token hash, expiry, and one-time use
+3. Ensures token belongs to the given email
+4. Hashes and saves new password
+5. Revokes all refresh tokens (forces re-login on all devices)
+6. Marks reset token as used
+
+```bash
+curl -X POST https://localhost:5001/api/auth/reset-password \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "jane@example.com",
+    "token": "<token_from_reset_link>",
+    "newPassword": "NewPassword1",
+    "confirmPassword": "NewPassword1"
+  }'
+```
+
+| Status | Condition | Message |
+|--------|-----------|---------|
+| `200` | Success | `"Password reset successful."` |
+| `400` | Validation failure | Password strength / mismatch errors |
+| `401` | Invalid or expired token | `"Invalid or expired password reset token."` |
+
+**OWASP practices applied:**
+
+- Generic response on forgot-password (no email enumeration)
+- Short-lived tokens (1 hour, configurable)
+- One-time use tokens stored as HMAC hashes (plain token only in email)
+- Previous reset tokens invalidated when a new one is issued
+- All sessions revoked after password change
+- Same error message for invalid email/token mismatches on reset
+
 ### Refresh token (`POST /api/auth/refresh`)
 
 1. Validates request (refresh token required)
@@ -293,6 +346,8 @@ cp .env.example .env
 | `JwtSettings__AccessTokenExpirationMinutes` | Access token lifetime (default: 15) |
 | `JwtSettings__RefreshTokenExpirationInDays` | Refresh token lifetime (default: 7) |
 | `EmailVerificationSettings__TokenExpirationHours` | Email verification token lifetime (default: 24) |
+| `PasswordResetSettings__TokenExpirationHours` | Password reset token lifetime (default: 1) |
+| `PasswordResetSettings__ResetLinkBaseUrl` | Frontend reset page URL for email links |
 | `ASPNETCORE_ENVIRONMENT` | `Development`, `Staging`, or `Production` |
 
 Non-secret defaults remain in `src/Api/appsettings.json`. Environment variables from `.env` override those values at runtime and during EF migrations.
@@ -308,6 +363,7 @@ Non-secret defaults remain in `src/Api/appsettings.json`. Environment variables 
 | `UserRoles` | Many-to-many join between users and roles |
 | `RefreshTokens` | Refresh tokens linked to users (cascade delete) |
 | `EmailVerificationTokens` | Hashed one-time email verification tokens (cascade delete) |
+| `PasswordResetTokens` | Hashed one-time password reset tokens (cascade delete) |
 
 ## Entity Framework Core
 
@@ -367,6 +423,7 @@ dotnet ef migrations list \
 | `AddAuthEntities` | Adds `Roles`, `RefreshTokens`, `UserRoles`; updates `Users` |
 | `SeedDefaultRoles` | Inserts `Admin` and `User` roles (idempotent) |
 | `AddEmailVerificationTokens` | Creates `EmailVerificationTokens` table |
+| `AddPasswordResetTokens` | Creates `PasswordResetTokens` table |
 
 ## Docker SQL Server
 
@@ -387,5 +444,3 @@ docker start sqlserver
 Api → Application → Domain
 Api → Infrastructure → Application → Domain
 ```
-
-Domain has zero project references. All dependencies point inward.

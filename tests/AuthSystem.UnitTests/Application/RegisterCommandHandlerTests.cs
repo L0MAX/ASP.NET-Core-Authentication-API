@@ -1,5 +1,4 @@
 using Application.Auth.Commands.Register;
-using Application.Common.Exceptions;
 using Application.Common.Interfaces;
 using AuthSystem.UnitTests.Helpers;
 using Domain.Constants;
@@ -103,7 +102,7 @@ public class RegisterCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_WhenEmailAlreadyExists_ThrowsConflictException()
+    public async Task Handle_WhenEmailAlreadyExists_ReturnsGenericSuccessWithoutCreatingUser()
     {
         var command = TestDataFactory.CreateRegisterCommand();
 
@@ -111,10 +110,10 @@ public class RegisterCommandHandlerTests
             .Setup(r => r.EmailExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
-        var act = () => CreateHandler().Handle(command, CancellationToken.None);
+        var result = await CreateHandler().Handle(command, CancellationToken.None);
 
-        await act.Should().ThrowAsync<ConflictException>()
-            .WithMessage("A user with this email already exists.");
+        result.User.Email.Should().Be("newuser@example.com");
+        result.User.Id.Should().Be(Guid.Empty);
 
         _userRepository.Verify(r => r.AddAsync(It.IsAny<User>(), It.IsAny<CancellationToken>()), Times.Never);
         _emailService.Verify(

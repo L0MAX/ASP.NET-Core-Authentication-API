@@ -9,6 +9,9 @@ namespace Infrastructure.Identity;
 /// </summary>
 public sealed class PasswordService : IPasswordService
 {
+    private static readonly string DummyPasswordHash = new PasswordHasher<User>()
+        .HashPassword(user: null!, "DummyTimingPlaceholder1!");
+
     private readonly PasswordHasher<User> _hasher = new();
 
     public string HashPassword(string password)
@@ -41,5 +44,11 @@ public sealed class PasswordService : IPasswordService
             PasswordVerificationResult.SuccessRehashNeeded => HashPassword(password),
             _ => null
         };
+    }
+
+    public void RunDummyVerification(string password)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(password);
+        _hasher.VerifyHashedPassword(user: null!, DummyPasswordHash, password);
     }
 }

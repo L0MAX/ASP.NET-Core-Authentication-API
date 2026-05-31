@@ -1,5 +1,4 @@
 using Application.Auth.Commands.SendVerification;
-using Application.Common.Exceptions;
 using Application.Common.Interfaces;
 using MediatR;
 using Microsoft.Extensions.Logging;
@@ -40,7 +39,10 @@ public sealed class SendVerificationCommandHandler : IRequestHandler<SendVerific
 
         if (user.EmailConfirmed)
         {
-            throw new ConflictException("Email address is already verified.");
+            _logger.LogInformation(
+                "Verification email requested for already verified user {UserId}. Returning success to prevent enumeration.",
+                user.Id);
+            return;
         }
 
         var verificationToken = await _verificationTokenProvider.GenerateAndStoreTokenAsync(user.Id, cancellationToken);

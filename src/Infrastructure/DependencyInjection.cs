@@ -17,6 +17,7 @@ public static class DependencyInjection
         IConfiguration configuration)
     {
         services.Configure<JwtSettings>(configuration.GetSection(JwtSettings.SectionName));
+        services.Configure<TokenSecuritySettings>(configuration.GetSection(TokenSecuritySettings.SectionName));
         services.Configure<EmailVerificationSettings>(configuration.GetSection(EmailVerificationSettings.SectionName));
         services.Configure<PasswordResetSettings>(configuration.GetSection(PasswordResetSettings.SectionName));
 
@@ -35,6 +36,7 @@ public static class DependencyInjection
         services.AddScoped<IApplicationDbContext>(provider =>
             provider.GetRequiredService<ApplicationDbContext>());
 
+        services.AddSingleton<ITokenHasher, TokenHasher>();
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IJwtService, JwtService>();
         services.AddScoped<IPasswordService, PasswordService>();

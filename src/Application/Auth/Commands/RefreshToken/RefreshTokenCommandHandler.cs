@@ -15,35 +15,34 @@ public sealed class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCom
 
     private readonly IUserRepository _userRepository;
     private readonly IJwtService _jwtService;
+    private readonly ITokenHasher _tokenHasher;
     private readonly ILogger<RefreshTokenCommandHandler> _logger;
 
     public RefreshTokenCommandHandler(
         IUserRepository userRepository,
         IJwtService jwtService,
+        ITokenHasher tokenHasher,
         ILogger<RefreshTokenCommandHandler> logger)
     {
         _userRepository = userRepository;
         _jwtService = jwtService;
+        _tokenHasher = tokenHasher;
         _logger = logger;
     }
 
     public async Task<AuthResponse> Handle(RefreshTokenCommand request, CancellationToken cancellationToken)
     {
-        var user = await _userRepository.GetByRefreshTokenAsync(request.RefreshToken, cancellationToken);
+        var tokenHash = _tokenHasher.Hash(request.RefreshToken);
+        var lookup = await _userRepository.GetByRefreshTokenHashAsync(tokenHash, cancellationToken);
 
-        if (user is null)
+        if (lookup is null)
         {
             _logger.LogWarning("Refresh attempt with unknown token");
             throw new UnauthorizedException(InvalidTokenMessage);
         }
 
-        var existingToken = user.RefreshTokens.FirstOrDefault(t => t.Token == request.RefreshToken);
-
-        if (existingToken is null)
-        {
-            _logger.LogWarning("Refresh token not found on user {UserId}", user.Id);
-            throw new UnauthorizedException(InvalidTokenMessage);
-        }
+        var user = lookup.User;
+        var existingToken = lookup.RefreshToken;
 
         if (existingToken.IsRevoked)
         {
@@ -53,13 +52,20 @@ public sealed class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCom
 
         if (existingToken.IsExpired)
         {
-            user.RevokeRefreshToken(existingToken.Token);
-            await _userRepository.SaveChangesAsync(cancellationToken);
+            await _userRepository.RevokeActiveRefreshTokenByIdAsync(existingToken.Id, cancellationToken);
             _logger.LogWarning("Refresh attempt with expired token for user {UserId}", user.Id);
             throw new UnauthorizedException(InvalidTokenMessage);
         }
 
-        return await RotateTokensAsync(user, existingToken, cancellationToken);
+        var revokedRows = await _userRepository.RevokeActiveRefreshTokenByIdAsync(existingToken.Id, cancellationToken);
+
+        if (revokedRows == 0)
+        {
+            await HandleReuseDetectedAsync(user, cancellationToken);
+            throw new UnauthorizedException(InvalidTokenMessage);
+        }
+
+        return await IssueRotatedTokensAsync(user, cancellationToken);
     }
 
     private async Task HandleReuseDetectedAsync(User user, CancellationToken cancellationToken)
@@ -68,19 +74,14 @@ public sealed class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCom
             "Refresh token reuse detected for user {UserId}. Revoking all sessions.",
             user.Id);
 
-        user.RevokeAllRefreshTokens();
-        await _userRepository.SaveChangesAsync(cancellationToken);
+        await _userRepository.RevokeAllRefreshTokensForUserAsync(user.Id, cancellationToken);
     }
 
-    private async Task<AuthResponse> RotateTokensAsync(
-        User user,
-        Domain.Entities.RefreshToken existingToken,
-        CancellationToken cancellationToken)
+    private async Task<AuthResponse> IssueRotatedTokensAsync(User user, CancellationToken cancellationToken)
     {
-        user.RevokeRefreshToken(existingToken.Token);
-
         var newRefreshTokenValue = _jwtService.GenerateRefreshToken();
-        user.IssueRefreshToken(newRefreshTokenValue, _jwtService.GetRefreshTokenExpiry());
+        var newRefreshTokenHash = _tokenHasher.Hash(newRefreshTokenValue);
+        user.IssueRefreshToken(newRefreshTokenHash, _jwtService.GetRefreshTokenExpiry());
 
         await _userRepository.SaveChangesAsync(cancellationToken);
 

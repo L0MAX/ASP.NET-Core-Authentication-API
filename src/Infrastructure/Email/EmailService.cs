@@ -1,5 +1,6 @@
 using Application.Common.Interfaces;
 using Infrastructure.Authentication;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -9,13 +10,16 @@ public sealed class EmailService : IEmailService
 {
     private readonly PasswordResetSettings _passwordResetSettings;
     private readonly ILogger<EmailService> _logger;
+    private readonly IHostEnvironment _environment;
 
     public EmailService(
         IOptions<PasswordResetSettings> passwordResetSettings,
-        ILogger<EmailService> logger)
+        ILogger<EmailService> logger,
+        IHostEnvironment environment)
     {
         _passwordResetSettings = passwordResetSettings.Value;
         _logger = logger;
+        _environment = environment;
     }
 
     public Task SendPasswordResetEmailAsync(
@@ -23,12 +27,13 @@ public sealed class EmailService : IEmailService
         string resetToken,
         CancellationToken cancellationToken = default)
     {
-        var resetLink = BuildPasswordResetLink(email, resetToken);
+        _logger.LogInformation("Password reset email queued for {Email}", email);
 
-        _logger.LogInformation(
-            "Password reset email sent to {Email}. Link: {ResetLink}",
-            email,
-            resetLink);
+        if (_environment.IsDevelopment())
+        {
+            var resetLink = BuildPasswordResetLink(email, resetToken);
+            _logger.LogDebug("Dev-only password reset link generated for {Email}: {ResetLink}", email, resetLink);
+        }
 
         return Task.CompletedTask;
     }
@@ -38,10 +43,12 @@ public sealed class EmailService : IEmailService
         string confirmationToken,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation(
-            "Email confirmation sent to {Email}. Token: {Token}",
-            email,
-            confirmationToken);
+        _logger.LogInformation("Email confirmation queued for {Email}", email);
+
+        if (_environment.IsDevelopment())
+        {
+            _logger.LogDebug("Dev-only email confirmation token generated for {Email}", email);
+        }
 
         return Task.CompletedTask;
     }

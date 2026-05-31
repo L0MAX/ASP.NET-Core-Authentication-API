@@ -42,6 +42,7 @@ services:
       EmailVerificationSettings__TokenExpirationHours: ${EmailVerificationSettings__TokenExpirationHours:-24}
       PasswordResetSettings__TokenExpirationHours: ${PasswordResetSettings__TokenExpirationHours:-1}
       PasswordResetSettings__ResetLinkBaseUrl: ${PasswordResetSettings__ResetLinkBaseUrl:-http://localhost:8080/reset-password}
+      TokenSecuritySettings__HashSecret: ${TOKEN_HASH_SECRET:?Set TOKEN_HASH_SECRET in .env}
     ports:
       - "${API_PORT:-8080}:8080"
     depends_on:

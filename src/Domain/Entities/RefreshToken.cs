@@ -8,13 +8,15 @@ namespace Domain.Entities;
 /// </summary>
 public class RefreshToken : Entity
 {
-    public string Token { get; private set; } = null!;
+    public string TokenHash { get; private set; } = null!;
 
     public DateTime ExpiresAt { get; private set; }
 
     public bool IsRevoked { get; private set; }
 
     public Guid UserId { get; private set; }
+
+    public byte[] RowVersion { get; private set; } = null!;
 
     public User User { get; private set; } = null!;
 
@@ -26,9 +28,9 @@ public class RefreshToken : Entity
     {
     }
 
-    internal static RefreshToken Create(Guid userId, string token, DateTime expiresAt)
+    internal static RefreshToken Create(Guid userId, string tokenHash, DateTime expiresAt)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(token);
+        ArgumentException.ThrowIfNullOrWhiteSpace(tokenHash);
 
         if (expiresAt <= DateTime.UtcNow)
         {
@@ -39,7 +41,7 @@ public class RefreshToken : Entity
         {
             Id = Guid.NewGuid(),
             UserId = userId,
-            Token = token,
+            TokenHash = tokenHash,
             ExpiresAt = expiresAt,
             IsRevoked = false
         };

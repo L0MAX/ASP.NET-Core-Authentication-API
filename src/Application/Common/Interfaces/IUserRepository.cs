@@ -1,3 +1,4 @@
+using Application.Auth.Models;
 using Domain.Entities;
 
 namespace Application.Common.Interfaces;
@@ -12,7 +13,13 @@ public interface IUserRepository
 
     Task<User?> GetByIdWithRolesAsync(Guid id, CancellationToken cancellationToken = default);
 
-    Task<User?> GetByRefreshTokenAsync(string refreshToken, CancellationToken cancellationToken = default);
+    Task<User?> GetByIdWithRefreshTokensAsync(Guid id, CancellationToken cancellationToken = default);
+
+    Task<RefreshTokenLookup?> GetByRefreshTokenHashAsync(string tokenHash, CancellationToken cancellationToken = default);
+
+    Task<int> RevokeActiveRefreshTokenByIdAsync(Guid refreshTokenId, CancellationToken cancellationToken = default);
+
+    Task RevokeAllRefreshTokensForUserAsync(Guid userId, CancellationToken cancellationToken = default);
 
     Task<Role?> GetRoleByNameAsync(string name, CancellationToken cancellationToken = default);
 

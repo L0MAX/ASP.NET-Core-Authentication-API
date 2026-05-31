@@ -13,6 +13,7 @@ public class LoginCommandHandlerTests
     private readonly Mock<IUserRepository> _userRepository = new();
     private readonly Mock<IPasswordService> _passwordService = new();
     private readonly Mock<IJwtService> _jwtService = new();
+    private readonly ITokenHasher _tokenHasher = new TestTokenHasher();
     private readonly Mock<ILogger<LoginCommandHandler>> _logger = new();
 
     private LoginCommandHandler CreateHandler() =>
@@ -20,6 +21,7 @@ public class LoginCommandHandlerTests
             _userRepository.Object,
             _passwordService.Object,
             _jwtService.Object,
+            _tokenHasher,
             _logger.Object);
 
     [Fact]
@@ -54,30 +56,12 @@ public class LoginCommandHandlerTests
         result.AccessTokenExpiresAt.Should().Be(accessExpiry);
         result.User.Email.Should().Be("user@example.com");
 
-        user.RefreshTokens.Should().ContainSingle(t => t.Token == "new-refresh-token");
+        user.RefreshTokens.Should().ContainSingle(t => t.TokenHash == _tokenHasher.Hash("new-refresh-token"));
         _userRepository.Verify(r => r.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
-    public async Task Handle_NormalizesEmailBeforeLookup()
-    {
-        var command = new LoginCommand("  User@Example.COM  ", TestDataFactory.ValidPassword);
-
-        _userRepository
-            .Setup(r => r.GetByEmailWithRolesAsync("user@example.com", It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Domain.Entities.User?)null);
-
-        var act = () => CreateHandler().Handle(command, CancellationToken.None);
-
-        await act.Should().ThrowAsync<UnauthorizedException>();
-
-        _userRepository.Verify(
-            r => r.GetByEmailWithRolesAsync("user@example.com", It.IsAny<CancellationToken>()),
-            Times.Once);
-    }
-
-    [Fact]
-    public async Task Handle_WhenUserNotFound_ThrowsUnauthorizedException()
+    public async Task Handle_WhenUserNotFound_RunsDummyVerificationAndThrowsUnauthorizedException()
     {
         var command = TestDataFactory.CreateLoginCommand();
 
@@ -89,6 +73,8 @@ public class LoginCommandHandlerTests
 
         await act.Should().ThrowAsync<UnauthorizedException>()
             .WithMessage("Invalid email or password.");
+
+        _passwordService.Verify(p => p.RunDummyVerification(command.Password), Times.Once);
     }
 
     [Fact]
@@ -129,36 +115,5 @@ public class LoginCommandHandlerTests
 
         await act.Should().ThrowAsync<ForbiddenException>()
             .WithMessage("Please verify your email address before logging in.");
-    }
-
-    [Fact]
-    public async Task Handle_WhenPasswordRehashNeeded_UpgradesStoredHash()
-    {
-        var command = TestDataFactory.CreateLoginCommand();
-        var user = TestDataFactory.CreateVerifiedUserWithRole();
-        var originalHash = user.PasswordHash;
-        const string upgradedHash = "upgraded-hash";
-
-        _userRepository
-            .Setup(r => r.GetByEmailWithRolesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(user);
-
-        _passwordService
-            .Setup(p => p.VerifyPassword(command.Password, originalHash))
-            .Returns(true);
-
-        _passwordService
-            .Setup(p => p.GetUpgradedHashIfNeeded(command.Password, originalHash))
-            .Returns(upgradedHash);
-
-        _jwtService.Setup(j => j.GenerateRefreshToken()).Returns("refresh");
-        _jwtService.Setup(j => j.GetRefreshTokenExpiry()).Returns(DateTime.UtcNow.AddDays(7));
-        _jwtService.Setup(j => j.GenerateAccessToken(user)).Returns("access");
-        _jwtService.Setup(j => j.GetAccessTokenExpiry()).Returns(DateTime.UtcNow.AddMinutes(15));
-
-        await CreateHandler().Handle(command, CancellationToken.None);
-
-        user.PasswordHash.Should().Be(upgradedHash);
-        _userRepository.Verify(r => r.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 }

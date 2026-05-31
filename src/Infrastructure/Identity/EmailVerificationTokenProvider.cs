@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using Application.Common.Interfaces;
 using Domain.Entities;
 using Infrastructure.Authentication;
@@ -10,16 +8,16 @@ namespace Infrastructure.Identity;
 public sealed class EmailVerificationTokenProvider : IEmailVerificationTokenProvider
 {
     private readonly IEmailVerificationTokenRepository _repository;
-    private readonly JwtSettings _jwtSettings;
+    private readonly ITokenHasher _tokenHasher;
     private readonly EmailVerificationSettings _settings;
 
     public EmailVerificationTokenProvider(
         IEmailVerificationTokenRepository repository,
-        IOptions<JwtSettings> jwtSettings,
+        ITokenHasher tokenHasher,
         IOptions<EmailVerificationSettings> settings)
     {
         _repository = repository;
-        _jwtSettings = jwtSettings.Value;
+        _tokenHasher = tokenHasher;
         _settings = settings.Value;
     }
 
@@ -29,8 +27,8 @@ public sealed class EmailVerificationTokenProvider : IEmailVerificationTokenProv
     {
         await InvalidateUserTokensAsync(userId, cancellationToken);
 
-        var plainToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
-        var tokenHash = HashToken(plainToken);
+        var plainToken = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+        var tokenHash = _tokenHasher.Hash(plainToken);
         var expiresAt = DateTime.UtcNow.AddHours(_settings.TokenExpirationHours);
 
         var entity = EmailVerificationToken.Create(userId, tokenHash, expiresAt);
@@ -56,7 +54,7 @@ public sealed class EmailVerificationTokenProvider : IEmailVerificationTokenProv
             return null;
         }
 
-        var tokenHash = HashToken(token);
+        var tokenHash = _tokenHasher.Hash(token);
         var storedToken = await _repository.GetValidByHashAsync(tokenHash, userId, cancellationToken);
 
         if (storedToken is null)
@@ -68,14 +66,5 @@ public sealed class EmailVerificationTokenProvider : IEmailVerificationTokenProv
         await _repository.SaveChangesAsync(cancellationToken);
 
         return userId;
-    }
-
-    private string HashToken(string token)
-    {
-        var key = Encoding.UTF8.GetBytes(_jwtSettings.Secret);
-        var tokenBytes = Encoding.UTF8.GetBytes(token);
-
-        using var hmac = new HMACSHA256(key);
-        return Convert.ToBase64String(hmac.ComputeHash(tokenBytes));
     }
 }

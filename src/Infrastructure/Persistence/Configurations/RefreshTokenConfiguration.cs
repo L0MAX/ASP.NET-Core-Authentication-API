@@ -12,11 +12,11 @@ public class RefreshTokenConfiguration : IEntityTypeConfiguration<RefreshToken>
 
         builder.HasKey(t => t.Id);
 
-        builder.Property(t => t.Token)
+        builder.Property(t => t.TokenHash)
             .IsRequired()
             .HasMaxLength(512);
 
-        builder.HasIndex(t => t.Token)
+        builder.HasIndex(t => t.TokenHash)
             .IsUnique();
 
         builder.Property(t => t.ExpiresAt)
@@ -28,6 +28,9 @@ public class RefreshTokenConfiguration : IEntityTypeConfiguration<RefreshToken>
 
         builder.Property(t => t.UserId)
             .IsRequired();
+
+        builder.Property(t => t.RowVersion)
+            .IsRowVersion();
 
         builder.HasIndex(t => t.UserId);
     }

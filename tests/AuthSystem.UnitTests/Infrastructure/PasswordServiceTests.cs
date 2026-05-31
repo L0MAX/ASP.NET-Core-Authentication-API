@@ -102,4 +102,12 @@ public class PasswordServiceTests
             _sut.VerifyPassword(password, hash).Should().BeTrue($"password '{password}' should verify");
         }
     }
+
+    [Fact]
+    public void RunDummyVerification_DoesNotThrow()
+    {
+        var act = () => _sut.RunDummyVerification(TestDataFactory.ValidPassword);
+
+        act.Should().NotThrow();
+    }
 }

@@ -1,3 +1,4 @@
+using Application.Auth.Models;
 using Application.Common.Interfaces;
 using Domain.Entities;
 using Infrastructure.Persistence;
@@ -23,7 +24,6 @@ public sealed class UserRepository : IUserRepository
     public Task<User?> GetByEmailWithRolesAsync(string email, CancellationToken cancellationToken = default) =>
         _context.Users
             .Include("_roles")
-            .Include("_refreshTokens")
             .FirstOrDefaultAsync(u => u.Email == email, cancellationToken);
 
     public Task<User?> GetByIdWithRolesAsync(Guid id, CancellationToken cancellationToken = default) =>
@@ -32,22 +32,48 @@ public sealed class UserRepository : IUserRepository
             .Include("_roles")
             .FirstOrDefaultAsync(u => u.Id == id, cancellationToken);
 
-    public async Task<User?> GetByRefreshTokenAsync(string refreshToken, CancellationToken cancellationToken = default)
-    {
-        var token = await _context.RefreshTokens
-            .AsNoTracking()
-            .FirstOrDefaultAsync(t => t.Token == refreshToken, cancellationToken);
+    public Task<User?> GetByIdWithRefreshTokensAsync(Guid id, CancellationToken cancellationToken = default) =>
+        _context.Users
+            .Include("_refreshTokens")
+            .FirstOrDefaultAsync(u => u.Id == id, cancellationToken);
 
-        if (token is null)
+    public async Task<RefreshTokenLookup?> GetByRefreshTokenHashAsync(
+        string tokenHash,
+        CancellationToken cancellationToken = default)
+    {
+        var refreshToken = await _context.RefreshTokens
+            .FirstOrDefaultAsync(t => t.TokenHash == tokenHash, cancellationToken);
+
+        if (refreshToken is null)
         {
             return null;
         }
 
-        return await _context.Users
+        var user = await _context.Users
             .Include("_roles")
-            .Include("_refreshTokens")
-            .FirstOrDefaultAsync(u => u.Id == token.UserId, cancellationToken);
+            .FirstOrDefaultAsync(u => u.Id == refreshToken.UserId, cancellationToken);
+
+        return user is null ? null : new RefreshTokenLookup(user, refreshToken);
     }
+
+    public Task<int> RevokeActiveRefreshTokenByIdAsync(
+        Guid refreshTokenId,
+        CancellationToken cancellationToken = default) =>
+        _context.RefreshTokens
+            .Where(token =>
+                token.Id == refreshTokenId
+                && !token.IsRevoked
+                && token.ExpiresAt > DateTime.UtcNow)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(token => token.IsRevoked, true),
+                cancellationToken);
+
+    public Task RevokeAllRefreshTokensForUserAsync(Guid userId, CancellationToken cancellationToken = default) =>
+        _context.RefreshTokens
+            .Where(token => token.UserId == userId && !token.IsRevoked)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(token => token.IsRevoked, true),
+                cancellationToken);
 
     public Task<Role?> GetRoleByNameAsync(string name, CancellationToken cancellationToken = default) =>
         _context.Roles.FirstOrDefaultAsync(r => r.Name == name, cancellationToken);

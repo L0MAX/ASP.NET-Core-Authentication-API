@@ -1,3 +1,4 @@
+using Application.Auth.Commands.Logout;
 using Application.Auth.DTOs.Requests;
 using Application.Auth.Commands.ForgotPassword;
 using Application.Auth.Commands.Login;
@@ -46,6 +47,12 @@ public sealed class AuthService : IAuthService
 
     public Task<AuthResponse> RefreshTokenAsync(RefreshTokenRequest request, CancellationToken cancellationToken = default) =>
         _mediator.Send(new RefreshTokenCommand(request.RefreshToken), cancellationToken);
+
+    public Task LogoutAsync(LogoutRequest request, CancellationToken cancellationToken = default) =>
+        _mediator.Send(new LogoutCommand(request.RefreshToken), cancellationToken);
+
+    public Task LogoutAllSessionsAsync(Guid userId, CancellationToken cancellationToken = default) =>
+        _mediator.Send(new LogoutAllSessionsCommand(userId), cancellationToken);
 
     public Task<UserResponse> GetUserByIdAsync(Guid userId, CancellationToken cancellationToken = default) =>
         _mediator.Send(new GetUserByIdQuery(userId), cancellationToken);

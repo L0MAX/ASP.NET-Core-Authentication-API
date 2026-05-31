@@ -1,6 +1,7 @@
 using Application.Auth.Commands.Login;
-using Application.Auth.Commands.Register;
 using Application.Auth.Commands.RefreshToken;
+using Application.Auth.Commands.Register;
+using Application.Common.Interfaces;
 using Domain.Constants;
 using Domain.Entities;
 using Infrastructure.Identity;
@@ -58,9 +59,14 @@ public static class TestDataFactory
     public static RefreshTokenCommand CreateRefreshTokenCommand(string token = "refresh-token-value") =>
         new(token);
 
-    public static string IssueRefreshToken(User user, string token = "refresh-token-value", int daysValid = 7)
+    public static string IssueRefreshToken(
+        User user,
+        ITokenHasher tokenHasher,
+        string token = "refresh-token-value",
+        int daysValid = 7)
     {
-        user.IssueRefreshToken(token, DateTime.UtcNow.AddDays(daysValid));
+        var tokenHash = tokenHasher.Hash(token);
+        user.IssueRefreshToken(tokenHash, DateTime.UtcNow.AddDays(daysValid));
         return token;
     }
 }

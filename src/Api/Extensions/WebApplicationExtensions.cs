@@ -1,3 +1,5 @@
+using Api.Configuration;
+using Api.Extensions;
 using Api.Filters;
 using Api.Middleware;
 using Api.Swagger;
@@ -14,15 +16,22 @@ public static class WebApplicationExtensions
     public static WebApplication ConfigurePipeline(this WebApplication app)
     {
         app.UseMiddleware<GlobalExceptionHandlingMiddleware>();
+        app.UseMiddleware<SecurityHeadersMiddleware>();
         app.UseMiddleware<CorrelationIdMiddleware>();
 
         if (app.Environment.IsDevelopment())
         {
             app.UseSwaggerDocumentation();
         }
+        else
+        {
+            app.UseHsts();
+        }
 
         app.UseSerilogRequestLogging();
         app.UseHttpsRedirection();
+        app.UseCors(CorsSettings.DefaultPolicyName);
+        app.UseRateLimiter();
         app.UseAuthentication();
         app.UseAuthorization();
         app.MapControllers();
@@ -44,6 +53,8 @@ public static class WebApplicationExtensions
 
         services.AddEndpointsApiExplorer();
         services.AddSwaggerDocumentation();
+        services.AddAuthRateLimiting();
+        services.AddCorsPolicy(configuration);
 
         services.AddApplication();
         services.AddInfrastructure(configuration);

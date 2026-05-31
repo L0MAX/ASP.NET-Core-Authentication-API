@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Api.Extensions;
 using Application.Auth.DTOs.Requests;
 using Application.Auth.DTOs.Responses;
 using Application.Common.Constants;
@@ -7,11 +8,13 @@ using Application.Common.Models;
 using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[EnableRateLimiting(RateLimitingExtensions.AuthPolicy)]
 public class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;
@@ -47,7 +50,6 @@ public class AuthController : ControllerBase
     [AllowAnonymous]
     [ProducesResponseType(typeof(ApiResponse<RegisterResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Register(
         [FromBody] RegisterRequest request,
         CancellationToken cancellationToken)
@@ -80,7 +82,6 @@ public class AuthController : ControllerBase
     [AllowAnonymous]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> SendVerification(
         [FromBody] SendVerificationRequest request,
         CancellationToken cancellationToken)
@@ -150,6 +151,37 @@ public class AuthController : ControllerBase
 
         var result = await _authService.RefreshTokenAsync(request, cancellationToken);
         return Ok(ApiResponse<AuthResponse>.Ok(result, "Token refreshed successfully."));
+    }
+
+    [HttpPost("logout")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> Logout(
+        [FromBody] LogoutRequest request,
+        CancellationToken cancellationToken)
+    {
+        await _authService.LogoutAsync(request, cancellationToken);
+        return Ok(ApiResponse<object>.Ok(null!, "Session revoked successfully."));
+    }
+
+    [HttpPost("logout-all")]
+    [Authorize]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> LogoutAll(CancellationToken cancellationToken)
+    {
+        var userIdValue = User.FindFirstValue(JwtClaimTypes.UserId)
+            ?? User.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? User.FindFirstValue("sub");
+
+        if (!Guid.TryParse(userIdValue, out var userId))
+        {
+            return Unauthorized(ApiResponse<object>.Fail("Invalid token."));
+        }
+
+        await _authService.LogoutAllSessionsAsync(userId, cancellationToken);
+        return Ok(ApiResponse<object>.Ok(null!, "All sessions revoked successfully."));
     }
 
     [HttpGet("me")]

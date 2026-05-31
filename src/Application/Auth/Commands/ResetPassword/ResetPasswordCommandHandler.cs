@@ -49,7 +49,7 @@ public sealed class ResetPasswordCommandHandler : IRequestHandler<ResetPasswordC
         }
 
         user.UpdatePassword(_passwordService.HashPassword(request.NewPassword));
-        user.RevokeAllRefreshTokens();
+        await _userRepository.RevokeAllRefreshTokensForUserAsync(user.Id, cancellationToken);
 
         await _userRepository.SaveChangesAsync(cancellationToken);
 

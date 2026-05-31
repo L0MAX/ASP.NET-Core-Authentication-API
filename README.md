@@ -159,6 +159,8 @@ curl https://localhost:5001/api/auth/me \
 | `POST` | `/api/auth/forgot-password` | No | Request password reset email |
 | `POST` | `/api/auth/reset-password` | No | Reset password with token |
 | `POST` | `/api/auth/refresh` | No | Rotate refresh token, issue new access token |
+| `POST` | `/api/auth/logout` | No | Revoke a refresh token (session logout) |
+| `POST` | `/api/auth/logout-all` | Bearer | Revoke all refresh tokens for current user |
 | `GET` | `/api/auth/me` | Bearer | Get current user profile |
 | `GET` | `/api/admin/dashboard` | Admin | Admin dashboard (sample) |
 | `GET` | `/api/admin/settings` | Admin | Admin settings (sample) |
@@ -603,6 +605,8 @@ cp .env.example .env
 | `EmailVerificationSettings__TokenExpirationHours` | Email verification token lifetime (default: 24) |
 | `PasswordResetSettings__TokenExpirationHours` | Password reset token lifetime (default: 1) |
 | `PasswordResetSettings__ResetLinkBaseUrl` | Frontend reset page URL for email links |
+| `TokenSecuritySettings__HashSecret` | HMAC secret for refresh/email/reset token hashing (min. 32 chars, separate from JWT) |
+| `CorsSettings__AllowedOrigins__0` | Allowed CORS origin (use indexed keys for multiple) |
 | `ASPNETCORE_ENVIRONMENT` | `Development`, `Staging`, or `Production` |
 
 Non-secret defaults remain in `src/Api/appsettings.json`. Environment variables from `.env` override those values at runtime and during EF migrations.
@@ -679,6 +683,43 @@ dotnet ef migrations list \
 | `SeedDefaultRoles` | Inserts `Admin` and `User` roles (idempotent) |
 | `AddEmailVerificationTokens` | Creates `EmailVerificationTokens` table |
 | `AddPasswordResetTokens` | Creates `PasswordResetTokens` table |
+| `HashRefreshTokensAtRest` | Renames `Token` → `TokenHash`, adds `RowVersion`, invalidates existing refresh tokens |
+
+## Security Architecture
+
+### Review summary (Principal Architect)
+
+The authentication system follows Clean Architecture with CQRS, domain-driven session management, and defense-in-depth controls after hardening.
+
+| Area | Implementation |
+|------|----------------|
+| **Password storage** | PBKDF2 via ASP.NET Core Identity `PasswordHasher`, per-password salt, automatic rehash on upgrade |
+| **JWT access tokens** | HS256, 15-minute TTL, issuer/audience/lifetime validation, algorithm pinning, zero clock skew |
+| **Refresh tokens** | HMAC-SHA256 hashed at rest (`TokenSecuritySettings:HashSecret`), rotation on use, reuse detection revokes all sessions |
+| **One-time tokens** | Email verification & password reset: 256-bit random, HMAC stored, single use, separate hashing secret |
+| **Enumeration protection** | Register, forgot-password, send-verification return generic success; login uses dummy PBKDF2 on unknown emails |
+| **Rate limiting** | Sliding window (20 req/min/IP) on all `/api/auth/*` endpoints |
+| **Security headers** | `X-Content-Type-Options`, `X-Frame-Options`, `CSP`, `HSTS` (production), `Referrer-Policy` |
+| **CORS** | Explicit origin allowlist via `CorsSettings:AllowedOrigins` |
+| **Session revocation** | `POST /api/auth/logout`, `POST /api/auth/logout-all`; password reset revokes all refresh tokens |
+| **Logging** | Tokens and reset links never logged at Information level; dev-only Debug metadata |
+
+### Required secrets
+
+| Variable | Purpose |
+|----------|---------|
+| `JwtSettings__Secret` | JWT signing (min. 32 chars) |
+| `TokenSecuritySettings__HashSecret` | HMAC for refresh/email/reset tokens (**must differ from JWT secret**) |
+
+### OWASP alignment
+
+| Risk | Mitigation |
+|------|------------|
+| A01 Broken Access Control | RBAC policies, JWT role claims, `[Authorize]` on protected endpoints |
+| A02 Cryptographic Failures | Hashed refresh/reset/verification tokens; PBKDF2 passwords; no plaintext secrets in logs |
+| A05 Security Misconfiguration | Security headers, CORS allowlist, Swagger disabled in Production |
+| A07 Auth Failures | Rate limiting, generic errors, email verification gate, refresh rotation + reuse detection |
+| A09 Logging Failures | Structured Serilog without sensitive token data |
 
 ## Docker Deployment
 
@@ -729,6 +770,7 @@ Copy `.env.docker.example` to `.env`. Docker Compose reads this file automatical
 |----------|----------|-------------|
 | `MSSQL_SA_PASSWORD` | Yes | SQL Server SA password (used by both containers) |
 | `JWT_SECRET` | Yes | JWT signing key (min. 32 characters) |
+| `TOKEN_HASH_SECRET` | Yes | HMAC secret for refresh/email/reset tokens (separate from JWT) |
 | `ASPNETCORE_ENVIRONMENT` | No | Default `Development` (enables Swagger). Use `Production` in prod |
 | `API_PORT` | No | Host port for API (default `8080`) |
 | `SQLSERVER_PORT` | No | Host port for SQL Server (default `1433`) |

@@ -109,17 +109,39 @@ public class User : BaseEntity
         ApplyUpdated(DateTime.UtcNow);
     }
 
-    public RefreshToken IssueRefreshToken(string token, DateTime expiresAt)
+    public RefreshToken IssueRefreshToken(string tokenHash, DateTime expiresAt)
     {
-        var refreshToken = RefreshToken.Create(Id, token, expiresAt);
+        var refreshToken = RefreshToken.Create(Id, tokenHash, expiresAt);
         _refreshTokens.Add(refreshToken);
         ApplyUpdated(DateTime.UtcNow);
         return refreshToken;
     }
 
-    public void RevokeRefreshToken(string token)
+    public void EnforceRefreshTokenLimit(int maxActiveTokens)
     {
-        var refreshToken = _refreshTokens.FirstOrDefault(t => t.Token == token);
+        var activeTokens = _refreshTokens
+            .Where(token => token.IsActive)
+            .OrderBy(token => token.ExpiresAt)
+            .ToList();
+
+        var revokedAny = false;
+
+        while (activeTokens.Count >= maxActiveTokens)
+        {
+            activeTokens[0].Revoke();
+            activeTokens.RemoveAt(0);
+            revokedAny = true;
+        }
+
+        if (revokedAny)
+        {
+            ApplyUpdated(DateTime.UtcNow);
+        }
+    }
+
+    public void RevokeRefreshToken(string tokenHash)
+    {
+        var refreshToken = _refreshTokens.FirstOrDefault(t => t.TokenHash == tokenHash);
 
         if (refreshToken is null)
         {

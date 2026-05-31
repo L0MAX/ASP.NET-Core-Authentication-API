@@ -1,7 +1,6 @@
 using Application.Auth.Commands.Register;
 using Application.Auth.DTOs.Responses;
 using Application.Auth.Mappings;
-using Application.Common.Exceptions;
 using Application.Common.Interfaces;
 using Domain.Constants;
 using Domain.Entities;
@@ -38,7 +37,11 @@ public sealed class RegisterCommandHandler : IRequestHandler<RegisterCommand, Re
 
         if (await _userRepository.EmailExistsAsync(normalizedEmail, cancellationToken))
         {
-            throw new ConflictException("A user with this email already exists.");
+            _logger.LogInformation(
+                "Registration attempt for existing email {Email}. Returning generic success to prevent enumeration.",
+                normalizedEmail);
+
+            return BuildGenericRegistrationResponse(request, normalizedEmail);
         }
 
         var defaultRole = await _userRepository.GetRoleByNameAsync(RoleNames.User, cancellationToken)
@@ -66,4 +69,18 @@ public sealed class RegisterCommandHandler : IRequestHandler<RegisterCommand, Re
             User = user.ToResponse()
         };
     }
+
+    private static RegisterResponse BuildGenericRegistrationResponse(RegisterCommand request, string normalizedEmail) =>
+        new()
+        {
+            User = new UserResponse
+            {
+                Id = Guid.Empty,
+                FirstName = request.FirstName.Trim(),
+                LastName = request.LastName.Trim(),
+                Email = normalizedEmail,
+                EmailConfirmed = false,
+                Roles = []
+            }
+        };
 }
